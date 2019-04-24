@@ -1,0 +1,9 @@
+[package]
+name = "time_series_start"
+version = "0.1.0"
+authors = ["Drew Callahan <acallahan@cs.uchicago.edu>"]
+edition = "2018"
+
+[dependencies]
+num = "0.2"
+rocksdb = "0.12.1"
