@@ -126,7 +126,7 @@ impl<T: Signal> SignalTracker<T> for SerialSignalTracker<T> {
  ****************************Signal*****************************
  ***************************************************************/
 
-type SignalId = u32; /* Type alias to describe signals */
+pub type SignalId = u32; /* Type alias to describe signals */
 const RECBUFFSIZE: usize = 512; /* Currently fixing size of record buffer */
 
 
@@ -155,6 +155,7 @@ impl TcpSignal {
 /* Required methods for signal that will be used by signal tracker */
 impl Signal for TcpSignal {
 
+	/* Function called by tracker to record the signal */
 	fn record(&self) -> [u8; RECBUFFSIZE] {
 		unimplemented!()
 	}

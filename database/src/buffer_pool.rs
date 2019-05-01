@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use crate::segment;
 
-use segment::{Segment, IncompleteSegment};
+use segment::{Segment};
 
 const BUFFERSIZE: usize = 500;
 
@@ -42,6 +42,12 @@ pub trait SegmentBuffer<'a,T: Clone> {
 	 */
 	fn get(&self, idx: usize) -> Result<&T, ()>;
 
+	/* If the index is valid it will return: Ok(mut ref T)
+	 * Otherwise, it will return: Err(()) to indicate 
+	 * that the index was invalid
+	 */
+	fn get_mut(&mut self, idx: usize) -> Result<&mut T, ()>;
+
 	/* If the buffer succeeds it will return: Ok(index)
 	 * Otherwise, it will return: Err(BufErr) to indicate 
 	 * that some failure occured and the item couldn't be
@@ -70,14 +76,6 @@ pub trait SegmentBuffer<'a,T: Clone> {
 	fn flush(&self);
 }
 
-pub trait MutableBuffer<T> {
-	/* If the index is valid it will return: Ok(mut ref T)
-	 * Otherwise, it will return: Err(()) to indicate 
-	 * that the index was invalid
-	 */
-	fn get_mut(&mut self, idx: usize) -> Result<&mut T, ()>;
-}
-
 
 /* Designed to carry error information 
  * May be unnecessary
@@ -87,7 +85,7 @@ pub struct BufErr {
 }
 
 /***************************************************************
- ***********************Immutable_Buffer************************
+ ************************VecDeque_Buffer************************
  ***************************************************************/
 
 pub struct VDBufferPool<T> {
@@ -96,6 +94,10 @@ pub struct VDBufferPool<T> {
 
 impl<'a,T: Clone> SegmentBuffer<'a,Segment<T>> for VDBufferPool<T> {
 	fn get(&self, idx: usize) -> Result<&Segment<T>, ()> {
+		unimplemented!()
+	}
+
+	fn get_mut(&mut self, idx: usize) -> Result<&mut Segment<T>, ()> {
 		unimplemented!()
 	}
 
@@ -130,57 +132,5 @@ impl<T> VDBufferPool<T> {
 		VDBufferPool {
 			buffer : VecDeque::with_capacity(BUFFERSIZE)
 		}
-	}
-}
-
-
-/***************************************************************
- ************************Mutable_Buffer*************************
- ***************************************************************/
-
-pub struct VDMutBufferPool<T> {
-	buffer: VecDeque<IncompleteSegment<T>>,
-}
-
-impl<T> VDMutBufferPool<T> {
-	pub fn new() -> VDMutBufferPool<T> {
-		unimplemented!()
-	}
-}
-
-impl<'a,T: Clone> SegmentBuffer<'a,IncompleteSegment<T>> for VDBufferPool<T> {
-	fn get(&self, idx: usize) -> Result<&IncompleteSegment<T>, ()> {
-		unimplemented!()
-	}
-
-	fn put(&self, item: IncompleteSegment<T>) -> Result<usize, BufErr> {
-		unimplemented!()
-	}
-
-	fn drain(&self, start: u32, end: u32) -> Drain<'a, IncompleteSegment<T>> {
-		unimplemented!()
-	}
-
-	fn copy(&self, start: u32, end: u32) -> Vec<IncompleteSegment<T>> {
-		unimplemented!()
-	}
-
-	fn evict(&self, num_evict: u32) {
-		unimplemented!()
-	}
-
-	fn persist(&self) {
-		unimplemented!()
-	}
-
-	fn flush(&self) {
-		unimplemented!()
-	}
-}
-
-impl<T> MutableBuffer<IncompleteSegment<T>> for VDMutBufferPool<T>
-{
-	fn get_mut(&mut self, idx: usize) -> Result<&mut IncompleteSegment<T>, ()> {
-		unimplemented!()
 	}
 }

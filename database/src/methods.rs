@@ -1,9 +1,8 @@
 mod kernel;
 mod deep_learning;
-mod fourier;
 
-use kernel::KernelMethod;
-use deep_learning::DeepLearningMethod;
+use std::fmt;
+use crate::dictionary::{DictionaryId};
 
 /* 
  * Overview:
@@ -36,23 +35,24 @@ use deep_learning::DeepLearningMethod;
 /* An enum holding every supported compression format 
  * Used to indicate what method of compression should be used
  */
-#[derive(Clone)]
+#[derive(Clone,Debug,Serialize,Deserialize, PartialEq)]
 pub enum Methods {
 	Fourier,
-	Kernel,
-	DeepLearning,
+	Kernel (DictionaryId),
+	SparseLearning (DictionaryId),
+	DeepLearning (String),
 }
 
-/* A struct to be held by each dictionary so it can keep track of 
- * what methods it supports as well as the parameters that the 
- * method will need.
- * Methods that are dictionary independent are not present.
- */
-pub struct MethodHolder {
-	kernel: Option<KernelMethod>,
-	deep_learning: Option<DeepLearningMethod>
+impl fmt::Display for Methods {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Methods::Fourier => write!(f, "Fourier"),
+			Methods::Kernel (id) => write!(f, "{}", format!("Kernel w/ DictionaryId {:?}", id)),
+			Methods::SparseLearning (id) => write!(f, "{}", format!("Sparse Learning w/ DictionaryId {:?}", id)),
+			Methods::DeepLearning (file) => write!(f, "{}", format!("Deep Learning w/ file {:?}", file))
+		}
+	}
 }
-
 
 /* Structures to be fleshed out later to provide error information
  * when methods are not properly implemented/used

@@ -24,6 +24,7 @@ const DICTIONARY: u32 = 1;
  * The current implementation uses RocksDB to implement the file manager.
  */
 
+/* Think about truncating results when memory is gotten too large */
 
 pub trait FileManager<T> {
 

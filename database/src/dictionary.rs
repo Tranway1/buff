@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 use rocksdb::DBVector;
 
-
-use crate::methods::{MethodHolder, Methods, MethodImplementError};
+/* 
+ * Changes: removed is_implmented and implement method from dictionary
+ *		Wanted to decouple dictionary from the method
+ */
 
 /* 
  * Overview:
@@ -99,9 +101,9 @@ pub struct Dictionary<T> {
 	id: DictionaryId,
 	num_items: u32,
 	entry_size: u32, /* Indicates the size of each entry in items */ 
-	methods: RwLock<MethodHolder>, /* Described in methods.rs */
 	items: Vec<T>, /* Flattened 2-D array to hold each entry */ 
 }
+
 
 impl<T> Dictionary<T> {
 
@@ -125,13 +127,18 @@ impl<T> Dictionary<T> {
 		unimplemented!()
 	}
 
-	pub fn is_implemented(&self, method_type: Methods) -> bool {
+	pub fn add_entries(&mut self, enties: Vec<T>) {
 		unimplemented!()
 	}
 
-	pub fn implement_method(&self, method_type: Methods) -> Result<(),MethodImplementError> {
+	pub fn remove_entires(&mut self, indexes: Vec<usize>) {
 		unimplemented!()
 	}
+
+	pub fn flush(&mut self) {
+		unimplemented!()
+	}
+
 }
 
 
