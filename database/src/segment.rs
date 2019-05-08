@@ -1,3 +1,7 @@
+use std::ops::Sub;
+use num::FromPrimitive;
+use std::ops::Div;
+use std::ops::Add;
 use crate::bincode;
 use serde::{Serialize, Deserialize};
 
@@ -48,12 +52,7 @@ use rand::distributions::{Normal, Distribution};
 /***************************************************************
  ***********************Segment Structure***********************
  ***************************************************************/
-/* Traits an object must met in order to become the data type of a segment */
-pub trait Segmentable<'a>: Serialize + Deserialize<'a> + Clone {}
-
-/* Implementing the trait for some basic primitives */
-impl<'a> Segmentable<'a> for f64 {}
-impl<'a> Segmentable<'a> for f32 {}
+pub type TimeLapse = u32;
 
 /* Time stamps currently represented by Duration, will 
  * switch to a DateTime object instead.
@@ -73,37 +72,22 @@ pub struct Segment<T> {
 	timestamp: Duration,
 	signal: SignalId,
 	data: Vec<T>,
+	time_lapse: Vec<TimeLapse>,
 	prev_seg_offset: Option<Duration>,
+	//next_seg_offset: Option<Duration>,
 }
 
-
-impl<'a,T> Segment<T> 
-	where T: Segmentable<'a>
-{
-	/* Construction Methods */
+impl<T> Segment<T> {
 	pub fn new(method: Option<Methods>, timestamp: Duration, signal: SignalId,
-	    data: Vec<T>, next_seg_offset: Option<Duration>) -> Segment<T> {
+	    data: Vec<T>, time_lapse: Vec<TimeLapse>, next_seg_offset: Option<Duration>) -> Segment<T> {
 		
 		Segment {
 			method: method,
 			timestamp: timestamp,
 			signal: signal,
 			data: data,
+			time_lapse: time_lapse,
 			prev_seg_offset: next_seg_offset
-		}
-	}
-
-	pub fn convert_to_bytes(&self) -> Result<Vec<u8>,()> {
-		match bincode::serialize(self) {
-			Ok(seg) => Ok(seg),
-			Err(_)  => Err(())
-		}
-	}
-
-	pub fn convert_from_bytes(bytes: &'a [u8]) -> Result<Segment<T>,()> {
-		match bincode::deserialize(bytes) {
-			Ok(seg) => Ok(seg),
-			Err(_)  => Err(())
 		}
 	}
 
@@ -117,7 +101,24 @@ impl<'a,T> Segment<T>
 			None       => None, 
 		}
 	}
+}
 
+impl<'a,T> Segment<T> 
+	where T: Serialize + Deserialize<'a>
+{
+	pub fn convert_to_bytes(&self) -> Result<Vec<u8>,()> {
+		match bincode::serialize(self) {
+			Ok(seg) => Ok(seg),
+			Err(_)  => Err(())
+		}
+	}
+
+	pub fn convert_from_bytes(bytes: &'a [u8]) -> Result<Segment<T>,()> {
+		match bincode::deserialize(bytes) {
+			Ok(seg) => Ok(seg),
+			Err(_)  => Err(())
+		}
+	}
 }
 
 /***************************************************************
@@ -131,7 +132,7 @@ pub struct SegmentKey {
 }
 
 impl<'a> SegmentKey {
-	pub fn new(timestamp: Duration, signal: SignalId) -> SegmentKey{
+	fn new(timestamp: Duration, signal: SignalId) -> SegmentKey{
 		SegmentKey {
 			timestamp: timestamp,
 			signal: signal,
@@ -163,9 +164,9 @@ impl<'a> SegmentKey {
  * Which is a Segmentable wrapper for Complex<T>
  * Note: This decision described below
  */
-impl<'a,T: FFTnum + Segmentable<'a>> Segment<T> {
+impl<'a,T: FFTnum + Serialize + Deserialize<'a>> Segment<T> {
 	
-	pub fn fourier_compress(&self) -> Segment<ComplexDef<T>> {
+	pub fn fourier_compress(&self) -> Segment<Complex<T>> {
 		let size = self.data.len();
 		let mut planner = FFTplanner::new(false);
 		let fft = planner.plan_fft(size);
@@ -182,12 +183,14 @@ impl<'a,T: FFTnum + Segmentable<'a>> Segment<T> {
 			method: Some(Fourier),
 			timestamp: self.timestamp,
 			signal: self.signal,
-			data: output.into_iter().map(|c| ComplexDef::from_complex(c)).collect(),
+			data: output,
+			time_lapse: self.time_lapse.clone(),
 			prev_seg_offset: self.prev_seg_offset,
 		}
 
 	}
 }
+
 
 /* Applys the inverse fourier transfrom to the result of the
  * forward operation defined above. Will return a segment
@@ -196,17 +199,16 @@ impl<'a,T: FFTnum + Segmentable<'a>> Segment<T> {
  * instead, and the ComplexDef coversion will be hidden behind 
  * calls to convert to and from bytes.
  */
-impl<'a,T: FFTnum + Segmentable<'a>> Segment<ComplexDef<T>> {
+impl<'a,T: FFTnum + Serialize + Deserialize<'a>> Segment<Complex<T>> {
 	
 	pub fn fourier_decompress(&self) -> Segment<T> {
 		let mut planner = FFTplanner::new(true);
 		let size = self.data.len();
 		let fft = planner.plan_fft(size);
 
-		let mut input:  Vec<Complex<T>> = self.data.iter().map(|c| c.to_complex()).collect();
 		let mut output: Vec<Complex<T>> = vec![Complex::zero(); size];
 
-		fft.process(&mut input, &mut output);
+		fft.process(&mut self.data.clone(), &mut output);
 
 		let output = output.iter().map(|c| c.re).collect();
 
@@ -215,6 +217,7 @@ impl<'a,T: FFTnum + Segmentable<'a>> Segment<ComplexDef<T>> {
 			timestamp: self.timestamp,
 			signal: self.signal,
 			data: output,
+			time_lapse: self.time_lapse.clone(),
 			prev_seg_offset: self.prev_seg_offset,
 		}
 	}
@@ -232,15 +235,15 @@ impl<'a,T: FFTnum + Segmentable<'a>> Segment<ComplexDef<T>> {
  * the mapping to a ComplexDef<T> only then. Given that there will be a lot
  * of anaylsis this seems like a better option.
  */
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Clone,Serialize,Deserialize,PartialEq,Debug)]
 pub struct ComplexDef<T> 
 {
 	re: T,
 	im: T,
 }
 
-impl<T> ComplexDef<T> 
-	where T: Clone + Num
+impl<'a,T> ComplexDef<T> 
+	where T: Copy + Num + Serialize + Deserialize<'a>
 {
 	#[inline]
 	fn new(re: T, im: T) -> ComplexDef<T> {
@@ -251,14 +254,73 @@ impl<T> ComplexDef<T>
 	}
 
 	#[inline]
-	fn to_complex(&self) -> Complex<T>{
-		Complex::new(self.re.clone(),self.im.clone())
+	fn to_complex(&self) -> Complex<T> {
+		Complex::new(self.re,self.im)
 	}
 
 	#[inline]
-	fn from_complex(c: Complex<T>) -> ComplexDef<T> {
-		ComplexDef::new(c.re.clone(),c.im.clone())
+	fn from_complex(c: &Complex<T>) -> ComplexDef<T> {
+		ComplexDef::new(c.re,c.im)
 	}
+
+	pub fn convert_from_bytes(bytes: &'a [u8]) -> Result<Segment<Complex<T>>,()> {
+		let deserialized_data: Result<Segment<ComplexDef<T>>,_> = bincode::deserialize(bytes);
+		match deserialized_data {
+			Ok(seg) => Ok(Segment::new(seg.method,seg.timestamp,seg.signal,
+						seg.data.iter().map(|x| ComplexDef::to_complex(x)).collect(),
+						seg.time_lapse,seg.prev_seg_offset)),
+			Err(e)  => {
+				println!("{:?}", e);
+				Err(())
+			}
+		}
+	}
+
+	pub fn convert_to_bytes(seg: &Segment<Complex<T>>) -> Result<Vec<u8>,()> {
+		let persitable_data: Segment<ComplexDef<T>> = 
+			Segment::new(
+				seg.method.clone(), seg.timestamp, seg.signal,
+				seg.data.iter().map(|x| ComplexDef::from_complex(x)).collect(),
+				seg.time_lapse.clone(), seg.prev_seg_offset
+			);
+		match bincode::serialize(&persitable_data) {
+			Ok(seg) => Ok(seg),
+			Err(e)  => {
+				println!("{:?}", e);
+				Err(())
+			}
+		}
+	}
+}
+
+/***************************************************************
+ **********************PAA  Implementation**********************
+ ***************************************************************/
+
+impl<T> Segment<T> 
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive,
+{
+	/* Performs paa compression on the data carried by the segment */
+	pub fn paa_compress(&self, chunk_size: usize) -> Segment<T> {
+
+		let zero = T::zero();
+		let paa_data = self.data.chunks(chunk_size)
+								.map(|x| {
+									x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
+								})
+								.collect();
+
+		Segment {
+			method: None,
+			timestamp: self.timestamp,
+			signal: self.signal,
+			data: paa_data,
+			time_lapse: self.time_lapse.clone(),
+			prev_seg_offset: self.prev_seg_offset,
+		}	
+	}
+
+
 }
 
 /***************************************************************
@@ -269,7 +331,7 @@ const RNG_SEED: [u8; 32] = [1, 9, 1, 0, 1, 1, 4, 3, 1, 4, 9, 8,
     4, 1, 4, 8, 2, 8, 1, 2, 2, 2, 6, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /* Test Helper Functions */
-fn random_f32signal(length: usize) -> Vec<f32> {
+pub fn random_f32signal(length: usize) -> Vec<f32> {
 	let mut sig = Vec::with_capacity(length);
 	let normal_dist = Normal::new(-10.0,10.0);
 	let mut rngs: StdRng = SeedableRng::from_seed(RNG_SEED);
@@ -280,7 +342,7 @@ fn random_f32signal(length: usize) -> Vec<f32> {
 	return sig;
 }
 
-fn random_f32complex_signal(length: usize) -> Vec<Complex<f32>> {
+pub fn random_f32complex_signal(length: usize) -> Vec<Complex<f32>> {
     let mut sig = Vec::with_capacity(length);
     let normal_dist = Normal::new(-10.0, 10.0);
     let mut rngs: StdRng = SeedableRng::from_seed(RNG_SEED);
@@ -291,13 +353,17 @@ fn random_f32complex_signal(length: usize) -> Vec<Complex<f32>> {
     return sig;
 }
 
-fn compare_vectors(vec1: &[f32], vec2: &[f32]) -> bool {
+pub fn compare_vectors<T>(vec1: &[T], vec2: &[T]) -> bool 
+	where T: Sub<T, Output = T> + Copy + Num + PartialOrd + FromPrimitive
+{
     assert_eq!(vec1.len(), vec2.len());
-    let mut sse = 0f32;
+    let mut sse = T::zero();
     for (&a, &b) in vec1.iter().zip(vec2.iter()) {
         sse = sse + (a - b);
     }
-    return (sse / vec1.len() as f32) < 0.1f32;
+    let size = FromPrimitive::from_usize(vec1.len()).unwrap();
+    let err_margin = FromPrimitive::from_f32(0.1).unwrap();
+    return (sse / size) < err_margin;
 }
 
 /* Main Segment Test Functions */
@@ -353,7 +419,7 @@ fn test_fourier_compression() {
 						-0.934893301,-0.938107111,-0.941129051,-0.944043071,-0.946063691,-0.947907441,-0.949688231,-0.950962361,-0.952008651,-0.953171851,-0.954431001,-0.956025911,
 						-0.957141151,-0.958265391,-0.959446581,-0.960726711,-0.962213701,-0.963790621,-0.964902871,-0.964471161,-0.965019791,-0.966054081,-0.966018111,-0.966335891,
 						-0.967106371,-0.967484111,-0.967454131,-0.967816881,-0.968638321,-0.969141981,-0.969540711,-0.970344161,-0.970377141];
-	let init_seg = Segment::new(None, Duration::new(5,0),0,data, None);
+	let init_seg = Segment::new(None, Duration::new(5,0),0,data, vec![], None);
 	let compressed_seg = init_seg.fourier_compress();
 	let decompressed_seg = compressed_seg.fourier_decompress();
 
@@ -362,6 +428,35 @@ fn test_fourier_compression() {
 	assert_eq!(decompressed_seg.method, None)
 }
 
+#[test]
+fn test_complex_segment_byte_conversion() {
+	let sizes = vec![10,100,1024,5000];
+	let segs: Vec<Segment<Complex<f32>>> = sizes.into_iter().map(move |x|
+		Segment{
+			method: None,
+			timestamp: Duration::default(),
+			signal: 0,
+			data: random_f32complex_signal(x),
+			time_lapse: vec![],
+			prev_seg_offset: None,
+		}).collect();
+
+	let mut converted_segs: Vec<Segment<Complex<f32>>> = segs.iter().map({|seg|
+		if let Ok(bytes) = ComplexDef::convert_to_bytes(seg) {
+			match ComplexDef::convert_from_bytes(&bytes) {
+				Ok(new_seg) => new_seg,
+				_           => panic!("Failed to convert bytes into segment"),
+			}
+		} else {
+			panic!("Failed to convert segment into bytes");
+		}
+	}).collect();
+	
+	for (seg1,seg2) in segs.iter().zip(converted_segs.iter_mut()) {
+		assert_eq!(seg1, seg2);
+	}
+	
+}
 
 #[test]
 fn test_segment_byte_conversion() {
@@ -372,6 +467,7 @@ fn test_segment_byte_conversion() {
 			timestamp: Duration::new(5,0),
 			signal: 0,
 			data: random_f32signal(x),
+			time_lapse: vec![],
 			prev_seg_offset: None,
 		}).collect();
 
@@ -392,17 +488,57 @@ fn test_segment_byte_conversion() {
 }
 
 #[test]
+fn test_paa_compression() {
+	let data = vec![-8.267001490320215, -4.701408995824961, -3.9473912522030634, 1.50407251209921, -4.999423104642167, -0.28289749385261587, -0.6753507278963333, -5.326739149145712,
+		-2.1362597150259894, -3.314403760401026, 3.420589457671861, -1.712699288745334, -8.183436090626452, 0.15183842041441586, -2.2802280274023357, 3.279496512365787, 5.247330227129956, -3.9719581135031152,
+		8.01152964472265, -5.48099695985327, 8.170989770876538, -9.129530005554134, -6.593045254202177, -0.8350828824329959, -4.91309022394743, -6.445900409398706, -6.4329687402629565,
+		-6.611464654075149, -3.1816580161523467, -9.887218622891062, 6.962306141809812, 5.091221080349031, -8.24772280500376, -5.096972967331386, 3.085634629993324, 4.232512030886422, 6.530522943413565, 2.984618610720876,
+		8.153663784677978, 2.6321383973434553, -9.41199132494699, 0.0869897646583766, -4.667797464065007, 7.607496844933294, -5.438272397674817, -9.084890536432288, 3.1874721901461953,
+		0.3798605807927693, -2.025513677453528, 6.706578138886233, 0.33282338747066653, -4.306610162957492, -9.827484921553733, 7.807651814568477, -2.006265477115674, -8.505813371648042, -0.9447616205646128, -2.506428732611883,
+		0.4254133276500802, -9.992707546838307, 8.893505303435681, 3.156886237175014, 0.015536746660293588, 5.655429001755028, -7.418224745449836, 4.863129452185156, -2.4838357061064187, 3.9137354423611157,
+		2.2397954007396237, 5.883220460412373, -6.215086648360739, 7.425055753593313, -7.69143693714661, 0.5710216632051797, 4.320316365240407, 9.072729037257837, -7.220428131285665, -8.77069028948311, 1.9955530846071703,
+		-6.188036231770518, 9.095302934925396, 5.584025322601583, -2.995158134634841, 4.92671046289562, -9.571007616192517, 2.7724560669537226, -1.8522905017334796, -2.8380095163670322,
+		6.334988114262327, 7.264121425542719, 1.874283061574129, 9.74422127363868, -9.672811184063907, -8.898637556200882, 6.603350224689084, -0.628918759685682, 8.513223771426471, -8.041579967785776, 8.921911750563325, -9.157191639192238];
+	let seg1 = Segment {
+				method: None,
+				timestamp: Duration::default(),
+				signal: 0,
+				data: data,
+				time_lapse: vec![],
+				prev_seg_offset: None,
+			};
+
+	let seg2 = seg1.clone();
+	let seg3 = seg1.clone();
+
+	let paa_seg1 = seg1.paa_compress(3);
+	let paa_seg2 = seg2.paa_compress(7);
+	let paa_seg3 = seg3.paa_compress(10);
+
+	compare_vectors(&paa_seg3.data, &vec![-3.2146803177212875, -0.15185342178258382, -4.585896903804042, 2.6327921846859317, -1.2660067881155765, -2.952418330360052, 2.4719177593168036,
+								   -1.2701002334142735, 1.8721138558253496, -0.07421490250367953]);
+	compare_vectors(&paa_seg2.data, &vec![-3.052771507520021, -2.443015732265462, 1.8537375791908872, -5.851583167124793, -1.610630079889484, 2.1726363152505264, -1.434520637107626,
+								   -1.3998743703356522, -0.13607946929910497, 1.8076070436995775, 0.037453014643388904,
+									0.5211010213059002, 0.5692201477199811, -0.3401645997117159, -0.11763994431445646] );
+	compare_vectors(&paa_seg1.data, &vec![-5.638600579449413, -1.2594160287985243, -2.712783197356012, -0.5355045304914997, -3.437275232538124, 1.5182895419975424, 3.567174151915306, -5.519219380729769, -5.930653124536364,
+								   -6.560113764372853, 1.268601472385028, 0.7403912311827868, 5.889601779604139, -2.2309543876483864, -0.8328576722688433, -1.839185921831108,
+									1.671295949634457, -2.1088144233142496, -3.818946823109443, -4.024574317266704, 4.0219760957569965, 1.0334445694967827, 1.2232317123314402,
+									2.3643965218816487, -0.9333663029003411, -2.306129794503646, 1.6342732625873495, 2.5051925502874544, -2.8836140169907583, 3.5870333411460043, 0.6485643837163005, -0.9747353637324933, 3.1311851847346737, -9.157191639192238]);
+}
+
+#[test]
 fn test_implicit_key_list() {
 	let data: Vec<f32> = vec![1.0,2.0,3.0];
-	let sig0seg1 = Segment::new(None,Duration::new(0,0),0,data.clone(),None);
-	let sig0seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),Some(Duration::new(15,0)));
-	let sig0seg3 = Segment::new(None,Duration::new(18,0),0,data.clone(),Some(Duration::new(3,0)));
-	let sig0seg4 = Segment::new(None,Duration::new(34,0),0,data.clone(),Some(Duration::new(16,0)));
+	let lapse: Vec<TimeLapse> = vec![];
+	let sig0seg1 = Segment::new(None,Duration::new(0,0),0,data.clone(),lapse.clone(),None);
+	let sig0seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(15,0)));
+	let sig0seg3 = Segment::new(None,Duration::new(18,0),0,data.clone(),lapse.clone(),Some(Duration::new(3,0)));
+	let sig0seg4 = Segment::new(None,Duration::new(34,0),0,data.clone(),lapse.clone(),Some(Duration::new(16,0)));
 
-	let sig1seg1 = Segment::new(None,Duration::new(10,0),0,data.clone(),None);
-	let sig1seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),Some(Duration::new(5,0)));
-	let sig1seg3 = Segment::new(None,Duration::new(35,0),0,data.clone(),Some(Duration::new(20,0)));
-	let sig1seg4 = Segment::new(None,Duration::new(135,0),0,data.clone(),Some(Duration::new(100,0)));
+	let sig1seg1 = Segment::new(None,Duration::new(10,0),0,data.clone(),lapse.clone(),None);
+	let sig1seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(5,0)));
+	let sig1seg3 = Segment::new(None,Duration::new(35,0),0,data.clone(),lapse.clone(),Some(Duration::new(20,0)));
+	let sig1seg4 = Segment::new(None,Duration::new(135,0),0,data.clone(),lapse.clone(),Some(Duration::new(100,0)));
 
 	assert_eq!(sig0seg4.get_prev_key(), Some(sig0seg3.get_key()));
 	assert_eq!(sig0seg3.get_prev_key(), Some(sig0seg2.get_key()));
