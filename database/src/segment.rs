@@ -1,3 +1,5 @@
+//use std::convert::TryFrom;
+use std::time::SystemTime;
 use std::ops::Sub;
 use num::FromPrimitive;
 use std::ops::Div;
@@ -10,7 +12,7 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 
 use std::time::{Duration};
-use crate::signal::SignalId;
+use crate::future_signal::SignalId;
 use num::Num;
 
 /* Currently plan to move methods into this file */
@@ -52,7 +54,6 @@ use rand::distributions::{Normal, Distribution};
 /***************************************************************
  ***********************Segment Structure***********************
  ***************************************************************/
-pub type TimeLapse = u32;
 
 /* Time stamps currently represented by Duration, will 
  * switch to a DateTime object instead.
@@ -69,17 +70,17 @@ pub type TimeLapse = u32;
 #[derive(Clone,Serialize,Deserialize,Debug,PartialEq)]
 pub struct Segment<T> {
 	method: Option<Methods>,
-	timestamp: Duration,
+	timestamp: SystemTime,
 	signal: SignalId,
 	data: Vec<T>,
-	time_lapse: Vec<TimeLapse>,
+	time_lapse: Vec<Duration>,
 	prev_seg_offset: Option<Duration>,
 	//next_seg_offset: Option<Duration>,
 }
 
 impl<T> Segment<T> {
-	pub fn new(method: Option<Methods>, timestamp: Duration, signal: SignalId,
-	    data: Vec<T>, time_lapse: Vec<TimeLapse>, next_seg_offset: Option<Duration>) -> Segment<T> {
+	pub fn new(method: Option<Methods>, timestamp: SystemTime, signal: SignalId,
+	    data: Vec<T>, time_lapse: Vec<Duration>, next_seg_offset: Option<Duration>) -> Segment<T> {
 		
 		Segment {
 			method: method,
@@ -101,6 +102,10 @@ impl<T> Segment<T> {
 			None       => None, 
 		}
 	}
+
+	pub fn get_signal(&self) -> SignalId {
+		self.signal
+	}
 }
 
 impl<'a,T> Segment<T> 
@@ -121,18 +126,30 @@ impl<'a,T> Segment<T>
 	}
 }
 
+/*impl<'a,T,U> TryFrom<U> for Segment<T>
+	where T: Serialize + Deserialize<'a>,
+		  U: AsRef<[u8]>
+{
+	type Error = ();
+
+	fn try_from(value: U) -> Result<Self, Self::Error> {
+		let bytes = value.as_ref();
+		Segment::convert_from_bytes(bytes)
+	}
+}
+*/
 /***************************************************************
  *******************Segment Key Implementation******************
  ***************************************************************/ 
 
-#[derive(Serialize,Deserialize,Debug,PartialEq)]
+#[derive(Serialize,Deserialize,Debug,PartialEq,Eq,Hash)]
 pub struct SegmentKey {
-	timestamp: Duration,
+	timestamp: SystemTime,
 	signal: SignalId,
 }
 
 impl<'a> SegmentKey {
-	fn new(timestamp: Duration, signal: SignalId) -> SegmentKey{
+	fn new(timestamp: SystemTime, signal: SignalId) -> SegmentKey{
 		SegmentKey {
 			timestamp: timestamp,
 			signal: signal,
@@ -419,7 +436,7 @@ fn test_fourier_compression() {
 						-0.934893301,-0.938107111,-0.941129051,-0.944043071,-0.946063691,-0.947907441,-0.949688231,-0.950962361,-0.952008651,-0.953171851,-0.954431001,-0.956025911,
 						-0.957141151,-0.958265391,-0.959446581,-0.960726711,-0.962213701,-0.963790621,-0.964902871,-0.964471161,-0.965019791,-0.966054081,-0.966018111,-0.966335891,
 						-0.967106371,-0.967484111,-0.967454131,-0.967816881,-0.968638321,-0.969141981,-0.969540711,-0.970344161,-0.970377141];
-	let init_seg = Segment::new(None, Duration::new(5,0),0,data, vec![], None);
+	let init_seg = Segment::new(None, SystemTime::now(),0,data, vec![], None);
 	let compressed_seg = init_seg.fourier_compress();
 	let decompressed_seg = compressed_seg.fourier_decompress();
 
@@ -434,7 +451,7 @@ fn test_complex_segment_byte_conversion() {
 	let segs: Vec<Segment<Complex<f32>>> = sizes.into_iter().map(move |x|
 		Segment{
 			method: None,
-			timestamp: Duration::default(),
+			timestamp: SystemTime::now(),
 			signal: 0,
 			data: random_f32complex_signal(x),
 			time_lapse: vec![],
@@ -464,7 +481,7 @@ fn test_segment_byte_conversion() {
 	let segs: Vec<Segment<f32>> = sizes.into_iter().map(move |x| 
 		Segment {
 			method: None,
-			timestamp: Duration::new(5,0),
+			timestamp: SystemTime::now(),
 			signal: 0,
 			data: random_f32signal(x),
 			time_lapse: vec![],
@@ -501,7 +518,7 @@ fn test_paa_compression() {
 		6.334988114262327, 7.264121425542719, 1.874283061574129, 9.74422127363868, -9.672811184063907, -8.898637556200882, 6.603350224689084, -0.628918759685682, 8.513223771426471, -8.041579967785776, 8.921911750563325, -9.157191639192238];
 	let seg1 = Segment {
 				method: None,
-				timestamp: Duration::default(),
+				timestamp: SystemTime::now(),
 				signal: 0,
 				data: data,
 				time_lapse: vec![],
@@ -529,16 +546,17 @@ fn test_paa_compression() {
 #[test]
 fn test_implicit_key_list() {
 	let data: Vec<f32> = vec![1.0,2.0,3.0];
-	let lapse: Vec<TimeLapse> = vec![];
-	let sig0seg1 = Segment::new(None,Duration::new(0,0),0,data.clone(),lapse.clone(),None);
-	let sig0seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(15,0)));
-	let sig0seg3 = Segment::new(None,Duration::new(18,0),0,data.clone(),lapse.clone(),Some(Duration::new(3,0)));
-	let sig0seg4 = Segment::new(None,Duration::new(34,0),0,data.clone(),lapse.clone(),Some(Duration::new(16,0)));
+	let lapse: Vec<Duration> = vec![];
+	let timestamp = SystemTime::now();
+	let sig0seg1 = Segment::new(None,timestamp,0,data.clone(),lapse.clone(),None);
+	let sig0seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(15,0)));
+	let sig0seg3 = Segment::new(None,timestamp + Duration::new(18,0),0,data.clone(),lapse.clone(),Some(Duration::new(3,0)));
+	let sig0seg4 = Segment::new(None,timestamp + Duration::new(34,0),0,data.clone(),lapse.clone(),Some(Duration::new(16,0)));
 
-	let sig1seg1 = Segment::new(None,Duration::new(10,0),0,data.clone(),lapse.clone(),None);
-	let sig1seg2 = Segment::new(None,Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(5,0)));
-	let sig1seg3 = Segment::new(None,Duration::new(35,0),0,data.clone(),lapse.clone(),Some(Duration::new(20,0)));
-	let sig1seg4 = Segment::new(None,Duration::new(135,0),0,data.clone(),lapse.clone(),Some(Duration::new(100,0)));
+	let sig1seg1 = Segment::new(None,timestamp + Duration::new(10,0),0,data.clone(),lapse.clone(),None);
+	let sig1seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(5,0)));
+	let sig1seg3 = Segment::new(None,timestamp + Duration::new(35,0),0,data.clone(),lapse.clone(),Some(Duration::new(20,0)));
+	let sig1seg4 = Segment::new(None,timestamp + Duration::new(135,0),0,data.clone(),lapse.clone(),Some(Duration::new(100,0)));
 
 	assert_eq!(sig0seg4.get_prev_key(), Some(sig0seg3.get_key()));
 	assert_eq!(sig0seg3.get_prev_key(), Some(sig0seg2.get_key()));
@@ -553,7 +571,7 @@ fn test_implicit_key_list() {
 
 #[test]
 fn test_key_byte_conversion() {
-	let key = SegmentKey::new(Duration::new(5,0),0);
+	let key = SegmentKey::new(SystemTime::now(),0);
 
 	if let Ok(bytes) = key.convert_to_bytes() {
 		match SegmentKey::convert_from_bytes(&bytes) {

@@ -1,4 +1,4 @@
-use std::time::{Duration};
+use std::time::{Duration,SystemTime};
 use std::fmt::Debug;
 
 use serde::{Serialize,Deserialize};
@@ -46,13 +46,13 @@ pub trait FileManager<T,U>
 	 * Ok(None): Indicating that the segment was not present in the file
 	 * Err(e): Indicating some failure
 	 */
-	fn get_segment(&self, key: T) -> Result<Option<DBVector>,Error>;
+	fn get_segment(&self, key: T) -> Result<Option<U>,Error>;
 
 	/* Same as write_segment, but for the bytes of a dictionary */
 	fn write_dictionary(&self, key: T, value: T) -> Result<(),Error>;
 
 	/* Same as get_segment, but for the bytes of a dictionary */
-	fn get_dictionary(&self, key: T) -> Result<Option<DBVector>,Error>;
+	fn get_dictionary(&self, key: T) -> Result<Option<U>,Error>;
 }
 
 /* Error enum used by the FileManager to wrap rocksdb errors */
@@ -162,7 +162,7 @@ impl<'a,T> FileManager<T,DBVector> for RocksFM<'a>
 
 const FILEPATH: &str = "../rocksdb";
 
-fn read_write_validate<'a,T>(rfm: &RocksFM, seg: &Segment<T>) -> DBVector
+fn read_write_validate<'a,T:Send>(rfm: &RocksFM, seg: &Segment<T>) -> DBVector
 	where T: Clone + Serialize + Deserialize<'a> + Debug + PartialEq
 {
 	let seg_key = seg.get_key();
@@ -214,7 +214,7 @@ fn read_write_test() {
 
 	let sizes: Vec<usize> = vec![10,100,1024,5000];
 	let segs: Vec<Segment<f32>> = sizes.into_iter().map(move |x| {
-		Segment::new(None, Duration::default(), x as u32, 
+		Segment::new(None, SystemTime::now(), x as u64, 
 			random_f32signal(x), vec![], None,
 		)}).collect();
 

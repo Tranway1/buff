@@ -1,10 +1,11 @@
-use std::cell::Cell;
+use crate::file_handler::{FileManager,RocksFM};
 use std::collections::vec_deque::Drain;
 use std::collections::VecDeque;
+use std::collections::hash_map::HashMap;
 
 use crate::segment;
 
-use segment::{Segment};
+use segment::{Segment,SegmentKey};
 
 const BUFFERSIZE: usize = 500;
 
@@ -34,36 +35,36 @@ const BUFFERSIZE: usize = 500;
  **************************Buffer_Pool**************************
  ***************************************************************/
 
-pub trait SegmentBuffer<'a,T: Clone> {
+pub trait SegmentBuffer<T: Clone + Send> {
 
 	/* If the index is valid it will return: Ok(ref T)
 	 * Otherwise, it will return: Err(()) to indicate 
 	 * that the index was invalid
 	 */
-	fn get(&self, idx: usize) -> Result<&T, ()>;
+	fn get(&self, key: SegmentKey) -> Option<&Segment<T>>;
 
 	/* If the index is valid it will return: Ok(mut ref T)
 	 * Otherwise, it will return: Err(()) to indicate 
 	 * that the index was invalid
 	 */
-	fn get_mut(&mut self, idx: usize) -> Result<&mut T, ()>;
+	fn get_mut(&mut self, key: SegmentKey) -> Option<&mut Segment<T>>;
 
 	/* If the buffer succeeds it will return: Ok(index)
 	 * Otherwise, it will return: Err(BufErr) to indicate 
 	 * that some failure occured and the item couldn't be
 	 * buffered.
 	 */
-	fn put(&self, item: T) -> Result<usize, BufErr>;
+	fn put(&mut self, item: Segment<T>) -> Result<(), BufErr>;
 
 
 	/* Will return a Drain iterator that gains ownership over
 	 * the items in the buffer, but will leave the allocation
 	 * of the buffer untouched
 	 */
-	fn drain(&self, start: u32, end: u32) -> Drain<'a, T>;
+	fn drain(&mut self) -> Drain<Segment<T>>;
 
 	/* Will copy the buffer and collect it into a vector */
-	fn copy(&self, start: u32, end: u32) -> Vec<T>;
+	fn copy(&self) -> Vec<Segment<T>>;
 
 	/* Will evict some number of items from the buffer freeing
 	   There location */
@@ -72,7 +73,7 @@ pub trait SegmentBuffer<'a,T: Clone> {
 	/* Will lock the buffer and write everything to disk */
 	fn persist(&self);
 
-	/* Will empty the buffer */
+	/* Will empty the buffer essentially clear */
 	fn flush(&self);
 }
 
@@ -88,33 +89,51 @@ pub struct BufErr {
  ************************VecDeque_Buffer************************
  ***************************************************************/
 
-pub struct VDBufferPool<T> {
+#[derive(Debug)]
+pub struct VDBufferPool<T:Send> {
 	buffer: VecDeque<Segment<T>>,
+	map: HashMap<SegmentKey,usize>
 }
 
-impl<'a,T: Clone> SegmentBuffer<'a,Segment<T>> for VDBufferPool<T> {
-	fn get(&self, idx: usize) -> Result<&Segment<T>, ()> {
-		unimplemented!()
+impl<T: Copy + Send> SegmentBuffer<T> for VDBufferPool<T> {
+
+	fn get(&self, key: SegmentKey) -> Option<&Segment<T>> {
+		match self.map.get(&key) {
+			Some(idx) => self.buffer.get(*idx),
+			None => None,
+		}
 	}
 
-	fn get_mut(&mut self, idx: usize) -> Result<&mut Segment<T>, ()> {
-		unimplemented!()
+	fn get_mut(&mut self, key: SegmentKey) -> Option<&mut Segment<T>> {
+		match self.map.get(&key) {
+			Some(idx) => self.buffer.get_mut(*idx),
+			None => None,
+		}
 	}
 
-	fn put(&self, item: Segment<T>) -> Result<usize, BufErr> {
-		unimplemented!()
+	fn put(&mut self, seg: Segment<T>) -> Result<(), BufErr> {
+		let seg_key = seg.get_key();
+		self.buffer.push_back(seg);
+		let idx = self.buffer.len() - 1;
+		if let Some(_) = self.map.insert(seg_key,idx) {
+			return Err(BufErr { info: 0 });
+		}
+
+		Ok(())
 	}
 
-	fn drain(&self, start: u32, end: u32) -> Drain<'a, Segment<T>> {
-		unimplemented!()
+
+	fn drain(&mut self) -> Drain<Segment<T>> {
+		self.buffer.drain(..)
 	}
 
-	fn copy(&self, start: u32, end: u32) -> Vec<Segment<T>> {
-		unimplemented!()
+	fn copy(&self) -> Vec<Segment<T>> {
+		Vec::from(self.buffer.clone())
 	}
 
-	fn evict(&self, num_evict: u32) {
-		unimplemented!()
+	/* Currently not implemented, need to change */
+	fn evict(&self, _num_evict: u32) {
+		unimplemented!() 
 	}
 
 	fn persist(&self) {
@@ -127,10 +146,32 @@ impl<'a,T: Clone> SegmentBuffer<'a,Segment<T>> for VDBufferPool<T> {
 }
 
 
-impl<T> VDBufferPool<T> {
+impl<T: Send> VDBufferPool<T> {
 	pub fn new() -> VDBufferPool<T> {
 		VDBufferPool {
-			buffer : VecDeque::with_capacity(BUFFERSIZE)
+			buffer: VecDeque::with_capacity(BUFFERSIZE),
+			map: HashMap::new(),
 		}
 	}
+
+	pub fn is_empty(&self) -> bool {
+		self.buffer.is_empty()
+	}
+
+	pub fn len(&self) -> usize {
+		self.buffer.len()
+	}
+
+	pub fn back(&mut self) -> Option<&Segment<T>> {
+		self.buffer.back()
+	}
+
+	pub fn idx_get(&mut self, idx: usize) -> Option<&Segment<T>> {
+		self.buffer.get(idx)
+	}
+
+	pub fn last_idx(&self) -> usize {
+		self.buffer.len() - 1
+	}
+
 }
