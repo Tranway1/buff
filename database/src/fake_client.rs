@@ -5,6 +5,7 @@ use futures::stream;
 use std::io::{BufReader,BufRead};
 use std::fs::File;
 
+/* client trait stats, produce stream, gnerate values, generation vs source file, montior with instants */
 
 pub fn construct_stream(file: &str) -> Result<IterOk<IntoIter<f32>,()>,()> {
 	let mut rv = Vec::new();

@@ -1,3 +1,5 @@
+/* DEPRECATED DO NOT USE OR IMPLEMENT, USE future_signal INSTEAD */
+
 use std::net::{TcpStream};
 use std::collections;
 

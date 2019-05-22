@@ -1,4 +1,4 @@
-use std::time::{Duration,SystemTime};
+use std::time::SystemTime;
 use std::fmt::Debug;
 
 use serde::{Serialize,Deserialize};
@@ -231,5 +231,5 @@ fn read_write_test() {
 		}
 	}
 
-	DB::destroy(&db_opts, FILEPATH);
+	let _ = DB::destroy(&db_opts, FILEPATH);
 }

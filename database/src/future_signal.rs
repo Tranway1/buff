@@ -1,15 +1,6 @@
-/*
- * Would like to implement variant of signals that uses 
- * tokio and futures. I think this could be a strong way of 
- * creating an implementation that only runs when packets need
- * to be collected, allowing the OS to dynamically schedule 
- * threads more effectively for querying, reading, and compressing.
- * It seems pretty doable with chunks and then running a tokio
- * core in a seperate thread. 
- */
-
 extern crate tokio;
 
+use crate::client::{construct_file_client,Amount,RunPeriod,Frequency};
 use std::sync::RwLock;
 use crate::buffer_pool::{SegmentBuffer,VDBufferPool};
 use crate::fake_client::construct_stream;
@@ -24,9 +15,10 @@ use tokio::runtime::{Builder,Runtime};
 
 pub type SignalId = u64;
 
-pub struct Signal<T,U> 
+pub struct Signal<T,U,F> 
 	where T: Copy + Send,
 	      U: Stream,
+	      F: Fn(usize,usize) -> bool,
 {
 	timestamp: Option<SystemTime>,
 	prev_seg_offset: Option<SystemTime>,
@@ -36,16 +28,20 @@ pub struct Signal<T,U>
 	time_lapse: Vec<Duration>,
 	signal: U,
 	buffer: Arc<RwLock<SegmentBuffer<T> + Send + Sync>>,
+	split_decider: F
 }
 
 /* Fix the buffer to not reuqire broad locking it */
-impl<T,U> Signal<T,U> 
+impl<T,U,F> Signal<T,U,F> 
 	where T: Copy + Send,
 		  U: Stream,
+		  F: Fn(usize,usize) -> bool,
 {
 
-	fn new(signal_id: u64, signal: U, seg_size: usize, buffer: Arc<RwLock<SegmentBuffer<T> + Send + Sync>>) 
-		-> Signal<T,U> 
+	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
+		buffer: Arc<RwLock<SegmentBuffer<T> + Send + Sync>>,
+		split_decider: F) 
+		-> Signal<T,U,F> 
 	{
 		Signal {
 			timestamp: None,
@@ -56,6 +52,7 @@ impl<T,U> Signal<T,U>
 			time_lapse: Vec::with_capacity(seg_size),
 			signal: signal,
 			buffer: buffer,
+			split_decider: split_decider,
 		}
 	}
 }
@@ -72,9 +69,10 @@ impl<T,U> Signal<T,U>
    		5. Allow early return/way for user to kill a signal without 
    			having the signal neeed to exhaust the stream
  */
-impl<T,U> Future for Signal<T,U> 
+impl<T,U,F> Future for Signal<T,U,F> 
 	where T: Copy + Send,
-		  U: Stream<Item=T,Error=()>
+		  U: Stream<Item=T,Error=()>,
+		  F: Fn(usize,usize) -> bool,
 {
 	type Item  = ();
 	type Error = ();
@@ -96,7 +94,7 @@ impl<T,U> Future for Signal<T,U>
 					};
 
 					/* case where the value reaches split size */
-					if self.data.len() == self.seg_size {
+					if (self.split_decider)(self.data.len(), self.seg_size) {
 						let data = mem::replace(&mut self.data, Vec::with_capacity(self.seg_size));
 						let time_lapse = mem::replace(&mut self.time_lapse, Vec::with_capacity(self.seg_size));
 						let old_timestamp = mem::replace(&mut self.timestamp, Some(cur_time));
@@ -150,24 +148,26 @@ pub fn execute_runtime<F>(mut rt: Runtime, init_future: F)
 	rt.shutdown_on_idle().wait().unwrap();
 }
 
-pub fn signal_handler() -> Result<(), Box<std::error::Error>> {
-	unimplemented!()
-}
-
 #[test]
 fn run_dual_signals() {
 	let buffer: Arc<RwLock<VDBufferPool<f32>>>  = Arc::new(RwLock::new(VDBufferPool::new()));
-	let client1 = match construct_stream("../UCRArchive2018/Ham/Ham_TEST") {
+	let client1 = match construct_file_client::<f32>(
+						"../UCRArchive2018/Ham/Ham_TEST", 1, ',',
+						 Amount::Unlimited, RunPeriod::Indefinite, None)
+	{
 		Ok(x) => x,
 		Err(_) => panic!("Failed to create client1"),
 	};
-	let client2 = match construct_stream("../UCRArchive2018/Fish/Fish_TEST") {
+	let client2 = match construct_file_client::<f32>(
+						"../UCRArchive2018/Fish/Fish_TEST", 1, ',',
+						 Amount::Unlimited, RunPeriod::Indefinite, None) 
+	{
 		Ok(x) => x,
 		Err(_) => panic!("Failed to create client2"),
 	};
 
-	let sig1 = Signal::new(1, client1, 400, buffer.clone());
-	let sig2 = Signal::new(2, client2, 600, buffer.clone());
+	let sig1 = Signal::new(1, client1, 400, buffer.clone(), |i,j| i >= j);
+	let sig2 = Signal::new(2, client2, 600, buffer.clone(), |i,j| i >= j);
 
 	let mut rt = match Builder::new().build() {
 		Ok(rt) => rt,
