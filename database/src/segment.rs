@@ -142,14 +142,14 @@ impl<'a,T> Segment<T>
  *******************Segment Key Implementation******************
  ***************************************************************/ 
 
-#[derive(Serialize,Deserialize,Debug,PartialEq,Eq,Hash)]
+#[derive(Serialize,Deserialize,Debug,PartialEq,Eq,Hash,Copy,Clone)]
 pub struct SegmentKey {
 	timestamp: SystemTime,
 	signal: SignalId,
 }
 
 impl<'a> SegmentKey {
-	fn new(timestamp: SystemTime, signal: SignalId) -> SegmentKey{
+	pub fn new(timestamp: SystemTime, signal: SignalId) -> SegmentKey{
 		SegmentKey {
 			timestamp: timestamp,
 			signal: signal,

@@ -1,10 +1,10 @@
 extern crate tokio;
 
 use crate::client::{construct_file_client,Amount,RunPeriod,Frequency};
-use std::sync::RwLock;
+use std::sync::Mutex;
 use crate::buffer_pool::{SegmentBuffer,VDBufferPool};
-use crate::fake_client::construct_stream;
-use crate::segment::Segment;
+use crate::file_handler::{};
+use crate::segment::{Segment,SegmentKey};
 use std::time::SystemTime;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +27,7 @@ pub struct Signal<T,U,F>
 	data: Vec<T>,
 	time_lapse: Vec<Duration>,
 	signal: U,
-	buffer: Arc<RwLock<SegmentBuffer<T> + Send + Sync>>,
+	buffer: Arc<Mutex<SegmentBuffer<T> + Send + Sync>>,
 	split_decider: F
 }
 
@@ -39,7 +39,7 @@ impl<T,U,F> Signal<T,U,F>
 {
 
 	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
-		buffer: Arc<RwLock<SegmentBuffer<T> + Send + Sync>>,
+		buffer: Arc<Mutex<SegmentBuffer<T> + Send + Sync>>,
 		split_decider: F) 
 		-> Signal<T,U,F> 
 	{
@@ -74,15 +74,16 @@ impl<T,U,F> Future for Signal<T,U,F>
 		  U: Stream<Item=T,Error=()>,
 		  F: Fn(usize,usize) -> bool,
 {
-	type Item  = ();
+	type Item  = Option<SystemTime>;
 	type Error = ();
 
-	fn poll(&mut self) -> Poll<(),()> {
+	fn poll(&mut self) -> Poll<Option<SystemTime>,()> {
 		loop {
 			match self.signal.poll() {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Err(_) => {
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(self.prev_seg_offset)),
+				Err(e) => {
+					println!("The client signal produced an error: {:?}", e);
 					/* Implement an error log to indicate a dropped value */
 					/* Continue to run and silence the error for now */
 				}
@@ -110,10 +111,10 @@ impl<T,U,F> Future for Signal<T,U,F>
 						let seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
 											   data, time_lapse, dur_offset);
 
-						match self.buffer.write() {
+						match self.buffer.lock() {
 							Ok(mut buf) => match buf.put(seg) {
 								Ok(()) => (),
-								Err(_) => panic!("Failed to put segment in buffer"),
+								Err(e) => panic!("Failed to put segment in buffer: {:?}", e),
 							},
 							Err(_)  => panic!("Failed to acquire buffer write lock"),
 						}; /* Currently panics if can't get it */
@@ -131,26 +132,17 @@ impl<T,U,F> Future for Signal<T,U,F>
 	}
 }
 
-/* may need to add enter().expect("Failure message for panic")
- * If it seems possible that someone will try to call run from within
- * the main executor running everything
- */
-pub fn construct_runtime(num_threads: usize) -> io::Result<Runtime> {
-	Builder::new()
-		.core_threads(num_threads)
-		.build()
-}
-
-pub fn execute_runtime<F>(mut rt: Runtime, init_future: F)
-	where F: Future<Item = (), Error = ()> + Send + 'static
-{
-	rt.spawn(init_future);
-	rt.shutdown_on_idle().wait().unwrap();
-}
 
 #[test]
 fn run_dual_signals() {
-	let buffer: Arc<RwLock<VDBufferPool<f32>>>  = Arc::new(RwLock::new(VDBufferPool::new()));
+	let mut db_opts = rocksdb::Options::default();
+	db_opts.create_if_missing(true);
+	let fm = match rocksdb::DB::open(&db_opts, "../rocksdb") {
+		Ok(x) => x,
+		Err(e) => panic!("Failed to create database: {:?}", e),
+	};
+
+	let buffer: Arc<Mutex<VDBufferPool<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(VDBufferPool::new(50,fm)));
 	let client1 = match construct_file_client::<f32>(
 						"../UCRArchive2018/Ham/Ham_TEST", 1, ',',
 						 Amount::Unlimited, RunPeriod::Indefinite, None)
@@ -174,8 +166,11 @@ fn run_dual_signals() {
 		_ => panic!("Failed to build runtime"),
 	};
 
-	rt.spawn(sig1);
-	rt.spawn(sig2);
+	let (seg_key1,seg_key2) = match rt.block_on(sig1.join(sig2)) {
+		Ok((Some(time1),Some(time2))) => (SegmentKey::new(time1,1),SegmentKey::new(time2,2)),
+		_ => panic!("Failed to get the last system time for signal1 or signal2"),
+	};
+
 	match rt.shutdown_on_idle().wait() {
 		Ok(_) => (),
 		Err(_) => panic!("Failed to shutdown properly"),
@@ -189,16 +184,14 @@ fn run_dual_signals() {
 		Err(_)   => panic!("Failed to get inner Arc value"),
 	};
 
-	let mut seg: &Segment<f32> = match buf.back() {
+	let mut seg1: &Segment<f32> = match buf.get(seg_key1).unwrap() {
 		Some(seg) => seg,
-		None => panic!("Buffer did not store any value"),
+		None => panic!("Buffer lost track of the last value"),
 	};
 
-	let seg_sig1 = seg.get_signal();
-
 	let mut counter1 = 1;
-	while let Some(key) = seg.get_prev_key() {
-		seg = match buf.get(key) {
+	while let Some(key) = seg1.get_prev_key() {
+		seg1 = match buf.get(key).unwrap() {
 			Some(seg) => seg,
 			None  => panic!(format!("Failed to get and remove segment from buffer, {}", counter1)),
 		};
@@ -207,26 +200,16 @@ fn run_dual_signals() {
 
 	assert!(counter1 == 113 || counter1 == 135);
 
-	let mut idx = buf.last_idx();
-
-	loop {
-		match buf.idx_get(idx) {
-			Some(pot_seg) => {
-				if pot_seg.get_signal() != seg_sig1 {
-					seg = pot_seg;
-					break;
-				}
-			}
-			None => panic!("Failed to find a segment from one of the clients"),
-		}
-		idx -= 1;
-	}
+	let mut seg2: &Segment<f32> = match buf.get(seg_key2).unwrap() {
+		Some(seg) => seg,
+		None => panic!("Buffer lost track of the last value"),
+	};
 
 	let mut counter2 = 1;
-	while let Some(key) = seg.get_prev_key() {
-		seg = match buf.get(key) {
+	while let Some(key) = seg2.get_prev_key() {
+		seg2 = match buf.get(key).unwrap() {
 			Some(seg) => seg,
-			None => panic!(format!("Failed to get and remove segment from buffer, {}", counter2)),
+			None  => panic!(format!("Failed to get and remove segment from buffer, {}", counter1)),
 		};
 		counter2 += 1;
 	}
@@ -237,5 +220,5 @@ fn run_dual_signals() {
 		_   => panic!("Incorrect number of segments produced"),
 	}
 
-	assert!(buf.len() == (113 + 135));
+	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");	
 }

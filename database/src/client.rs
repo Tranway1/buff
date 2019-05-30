@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use futures::stream::iter_ok;
 use tokio::timer::Interval;
 use std::time::Instant;
@@ -160,7 +161,7 @@ fn construct_file_iterator<T>(file: &str, skip_val: usize, delim: char) -> Resul
 	Ok(BufReader::new(f)
 		.lines()
 		.filter_map(Result::ok)
-		.flat_map(|line: String| {
+		.flat_map(move |line: String| {
 			line.split(delim)
 				.skip(skip_val)
 				.filter_map(|item: &str| item.parse::<T>().ok())
@@ -180,9 +181,34 @@ pub fn construct_file_client<T>(file: &str, skip_val: usize, delim: char, amount
 	Ok(client_from_iter(producer, amount, run_period, interval_args))
 }
 
+
+pub fn construct_gen_client<'a,T,U:'a,R>(dist: &'a T, rng: &'a mut R, 
+		amount: Amount, run_period: RunPeriod, interval_args: Option<(Instant,Duration)>) 
+			-> impl Stream<Item=U,Error=()> + 'a
+		where R: Rng,
+		      T: Distribution<U>
+
+{
+	let producer = rng.sample_iter(dist);
+	client_from_iter(producer, amount, run_period, interval_args)
+}
+
 #[test]
 fn construct_client() {
+	let mut db_opts = rocksdb::Options::default();
+	db_opts.create_if_missing(true);
+	let fm = match rocksdb::DB::open(&db_opts, "../rocksdb") {
+		Ok(x) => x,
+		Err(e) => panic!("Failed to create database: {:?}", e),
+	};
+
 	let client = construct_file_client::<f32>("../UCRArchive2018/Ham/Ham_TEST", 1, ',', Amount::Unlimited, RunPeriod::Indefinite, None).unwrap();
-	let buffer: Arc<RwLock<VDBufferPool<f32>>>  = Arc::new(RwLock::new(VDBufferPool::new()));
-	let sig1 = Signal::new(1, client, 400, buffer.clone(),|i,j| i >= j);
+	let buffer: Arc<Mutex<VDBufferPool<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(VDBufferPool::new(500,fm)));
+	let _sig1 = Signal::new(1, client, 400, buffer.clone(),|i,j| i >= j);
+
+	let dist = Normal::new(0.0,1.0);
+	let mut rng = thread_rng();
+	let _std_norm_client = construct_gen_client(&dist, &mut rng, Amount::Unlimited, RunPeriod::Indefinite, None);
+
+	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");
 }

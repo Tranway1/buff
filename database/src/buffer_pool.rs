@@ -1,13 +1,15 @@
-use crate::file_handler::{FileManager,RocksFM};
+use std::fmt::Debug;
+use serde::{Serialize,Deserialize};
+use serde::de::DeserializeOwned;
+use rocksdb::DBVector;
+use crate::file_handler::{FileManager};
 use std::collections::vec_deque::Drain;
 use std::collections::VecDeque;
-use std::collections::hash_map::HashMap;
+use std::collections::hash_map::{HashMap,Entry};
 
 use crate::segment;
 
 use segment::{Segment,SegmentKey};
-
-const BUFFERSIZE: usize = 500;
 
 /* 
  * Overview:
@@ -35,19 +37,19 @@ const BUFFERSIZE: usize = 500;
  **************************Buffer_Pool**************************
  ***************************************************************/
 
-pub trait SegmentBuffer<T: Clone + Send> {
+pub trait SegmentBuffer<T: Copy + Send> {
 
 	/* If the index is valid it will return: Ok(ref T)
 	 * Otherwise, it will return: Err(()) to indicate 
 	 * that the index was invalid
 	 */
-	fn get(&self, key: SegmentKey) -> Option<&Segment<T>>;
+	fn get(&mut self, key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr>;
 
 	/* If the index is valid it will return: Ok(mut ref T)
 	 * Otherwise, it will return: Err(()) to indicate 
 	 * that the index was invalid
 	 */
-	fn get_mut(&mut self, key: SegmentKey) -> Option<&mut Segment<T>>;
+	fn get_mut(&mut self, key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr>;
 
 	/* If the buffer succeeds it will return: Ok(index)
 	 * Otherwise, it will return: Err(BufErr) to indicate 
@@ -66,112 +68,232 @@ pub trait SegmentBuffer<T: Clone + Send> {
 	/* Will copy the buffer and collect it into a vector */
 	fn copy(&self) -> Vec<Segment<T>>;
 
-	/* Will evict some number of items from the buffer freeing
-	   There location */
-	fn evict(&self, num_evict: u32);
-
 	/* Will lock the buffer and write everything to disk */
-	fn persist(&self);
+	fn persist(&self) -> Result<(),BufErr>;
 
 	/* Will empty the buffer essentially clear */
-	fn flush(&self);
+	fn flush(&mut self);
 }
 
 
 /* Designed to carry error information 
  * May be unnecessary
  */
-pub struct BufErr {
-	info: u32,
+#[derive(Debug)]
+pub enum BufErr {
+	NonUniqueKey,
+	FailedSegKeySer,
+	FailedSegSer,
+	FileManagerErr,
+	ByteConvertFail,
+	GetFail,
+	GetMutFail,
+	EvictFailure,
 }
+
 
 /***************************************************************
  ************************VecDeque_Buffer************************
  ***************************************************************/
+/* Look into fixed vec deque or concurrent crates if poor performance */
 
 #[derive(Debug)]
-pub struct VDBufferPool<T:Send> {
-	buffer: VecDeque<Segment<T>>,
-	map: HashMap<SegmentKey,usize>
+pub struct VDBufferPool<T,U> 
+	where T: Copy + Send,
+		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
+{
+	hand: usize,
+	buffer: HashMap<SegmentKey,Segment<T>>,
+	clock: Vec<(SegmentKey,bool)>,
+	clock_map: HashMap<SegmentKey,usize>,
+	file_manager: U,
+	buf_size: usize,
 }
 
-impl<T: Copy + Send> SegmentBuffer<T> for VDBufferPool<T> {
 
-	fn get(&self, key: SegmentKey) -> Option<&Segment<T>> {
-		match self.map.get(&key) {
-			Some(idx) => self.buffer.get(*idx),
-			None => None,
+impl<T,U> SegmentBuffer<T> for VDBufferPool<T,U> 
+	where T: Copy + Send + Serialize + DeserializeOwned + Debug,
+		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
+{
+
+	fn get(&mut self, key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr> {		
+		if self.retrieve(key)? {
+			match self.buffer.get(&key) {
+				Some(seg) => Ok(Some(seg)),
+				None => Err(BufErr::GetFail),
+			}
+		} else {
+			Ok(None)
 		}
 	}
 
-	fn get_mut(&mut self, key: SegmentKey) -> Option<&mut Segment<T>> {
-		match self.map.get(&key) {
-			Some(idx) => self.buffer.get_mut(*idx),
-			None => None,
+	fn get_mut(&mut self, key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr> {
+		if self.retrieve(key)? {
+			match self.buffer.get_mut(&key) {
+				Some(seg) => Ok(Some(seg)),
+				None => Err(BufErr::GetMutFail),
+			}
+		} else {
+			Ok(None)
 		}
 	}
 
+	#[inline]
 	fn put(&mut self, seg: Segment<T>) -> Result<(), BufErr> {
 		let seg_key = seg.get_key();
-		self.buffer.push_back(seg);
-		let idx = self.buffer.len() - 1;
-		if let Some(_) = self.map.insert(seg_key,idx) {
-			return Err(BufErr { info: 0 });
+		self.put_with_key(seg_key, seg)
+	}
+
+
+	fn drain(&mut self) -> Drain<Segment<T>> {
+		unimplemented!()
+	}
+
+	fn copy(&self) -> Vec<Segment<T>> {
+		self.buffer.values().map(|x| x.clone()).collect()
+	}
+
+	/* Write to file system */
+	fn persist(&self) -> Result<(),BufErr> {
+		for (seg_key,seg) in self.buffer.iter() {
+			let seg_key_bytes = match seg_key.convert_to_bytes() {
+				Ok(bytes) => bytes,
+				Err(_) => return Err(BufErr::FailedSegKeySer),
+			};
+			let seg_bytes = match seg.convert_to_bytes() {
+				Ok(bytes) => bytes,
+				Err(_) => return Err(BufErr::FailedSegSer),
+			};
+
+			match self.file_manager.fm_write(seg_key_bytes,seg_bytes) {
+				Err(_) => return Err(BufErr::FileManagerErr),
+				_ => (),
+			}
 		}
 
 		Ok(())
 	}
 
-
-	fn drain(&mut self) -> Drain<Segment<T>> {
-		self.buffer.drain(..)
-	}
-
-	fn copy(&self) -> Vec<Segment<T>> {
-		Vec::from(self.buffer.clone())
-	}
-
-	/* Currently not implemented, need to change */
-	fn evict(&self, _num_evict: u32) {
-		unimplemented!() 
-	}
-
-	fn persist(&self) {
-		unimplemented!()
-	}
-
-	fn flush(&self) {
-		unimplemented!()
+	fn flush(&mut self) {
+		self.buffer.clear();
+		self.clock.clear();
 	}
 }
 
 
-impl<T: Send> VDBufferPool<T> {
-	pub fn new() -> VDBufferPool<T> {
+impl<T,U> VDBufferPool<T,U> 
+	where T: Copy + Send + Serialize + DeserializeOwned + Debug,
+		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
+{
+	pub fn new(buf_size: usize, file_manager: U) -> VDBufferPool<T,U> {
 		VDBufferPool {
-			buffer: VecDeque::with_capacity(BUFFERSIZE),
-			map: HashMap::new(),
+			hand: 0,
+			buffer: HashMap::with_capacity(buf_size),
+			clock: Vec::with_capacity(buf_size),
+			clock_map: HashMap::with_capacity(buf_size),
+			file_manager: file_manager,
+			buf_size: buf_size,
 		}
 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.buffer.is_empty()
+	/* Assumes that the segment is in memory and will panic otherwise */
+	#[inline]
+	fn update(&mut self, key: SegmentKey) {
+		let key_idx: usize = *self.clock_map.get(&key).unwrap();
+		self.clock[key_idx].1 = false;
 	}
 
-	pub fn len(&self) -> usize {
-		self.buffer.len()
+	#[inline]
+	fn update_hand(&mut self) {
+		self.hand = (self.hand + 1) % self.buf_size;
 	}
 
-	pub fn back(&mut self) -> Option<&Segment<T>> {
-		self.buffer.back()
+	fn put_with_key(&mut self, key: SegmentKey, seg: Segment<T>) -> Result<(), BufErr> {
+		let slot = if self.buffer.len() >= self.buf_size {
+			let slot = self.evict()?;
+			self.clock[slot] = (key,true);
+			slot
+		} else {
+			let slot = self.hand;
+			self.clock.push((key,true));
+			self.update_hand();
+			slot
+		};
+
+		
+		match self.clock_map.insert(key,slot) {
+			None => (),
+			_ => return Err(BufErr::NonUniqueKey),
+		}
+		match self.buffer.entry(key) {
+			Entry::Occupied(_) => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+			Entry::Vacant(vacancy) => {
+				vacancy.insert(seg);
+				Ok(())
+			}
+		}
 	}
 
-	pub fn idx_get(&mut self, idx: usize) -> Option<&Segment<T>> {
-		self.buffer.get(idx)
+	/* Gets the segment from the filemanager and places it in */
+	fn retrieve(&mut self, key: SegmentKey) -> Result<bool,BufErr> {
+		if let Some(_) = self.buffer.get(&key) {
+			println!("reading from the buffer");
+			self.update(key);
+			return Ok(true);
+		}
+		println!("reading from the file_manager");
+		match key.convert_to_bytes() {
+			Ok(key_bytes) => {
+				match self.file_manager.fm_get(key_bytes) {
+					Err(_) => Err(BufErr::FileManagerErr),
+					Ok(None) => Ok(false),
+					Ok(Some(bytes)) => {
+						match Segment::convert_from_bytes(&bytes) {
+							Ok(seg) => {
+								self.put_with_key(key,seg)?;
+								Ok(true)
+							}
+							Err(()) => Err(BufErr::ByteConvertFail),
+						}
+					}
+				}				
+			}
+			Err(_) => Err(BufErr::ByteConvertFail)
+		}
 	}
 
-	pub fn last_idx(&self) -> usize {
-		self.buffer.len() - 1
-	}
+	fn evict(&mut self) -> Result<usize,BufErr> {
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				let seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => return Err(BufErr::EvictFailure),
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
 
+				/* Write the segment to disk */
+				let seg_key_bytes = match seg_key.convert_to_bytes() {
+					Ok(bytes) => bytes,
+					Err(()) => return Err(BufErr::FailedSegKeySer)
+				};
+				let seg_bytes = match seg.convert_to_bytes() {
+					Ok(bytes) => bytes,
+					Err(()) => return Err(BufErr::FailedSegSer),
+				};
+
+				match self.file_manager.fm_write(seg_key_bytes,seg_bytes) {
+					Ok(()) => return Ok(self.hand),
+					Err(_) => return Err(BufErr::FileManagerErr),
+				}
+
+			} else {
+				self.clock[self.hand].1 = false;
+			} 
+
+			self.update_hand();
+		}
+	}
 }
