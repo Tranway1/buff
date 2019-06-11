@@ -5,6 +5,8 @@ extern crate bincode;
 extern crate futures;
 extern crate toml_loader;
 
+use crate::client::construct_normal_gen_client;
+use crate::client::construct_gen_client;
 use std::time::SystemTime;
 use crate::client::construct_file_client;
 use crate::segment::Segment;
@@ -24,6 +26,7 @@ use tokio::timer::Interval;
 use tokio::prelude::*;
 use tokio::runtime::{Builder,Runtime};
 use std::sync::{Arc,Mutex};
+use rand::distributions::{Normal};
 
 mod buffer_pool;
 mod dictionary;
@@ -222,6 +225,40 @@ pub fn run_test<T: 'static>(config_file: &str)
 					None => panic!("Buffer and File manager provided not supported yet"),
 				}
 			}
+			"gen" => {
+				if amount == Amount::Unlimited && run_period == RunPeriod::Indefinite {
+					if !client_config.lookup("never_die").map_or(false,|v| v.as_bool().expect("The never_die field must be provided as a boolean")) {
+						panic!("Provided a generator client that does have an amount or time bound\n
+							    This client would run indefintely and the program would not terminate\n
+							    If this is what you want, then create the never_die field under this client and set the value to true");
+					}
+				}
+				let _params = client_config.lookup("params").expect("The generator client type requires a params table");
+/*				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
+								   .expect("The gen client must be provided a gen type field")
+								   .as_str()
+								   .expect("The gen type must be provided as a string") 
+				{
+					"normal" => {
+						let std = params.lookup("std")
+										.expect("The normal distribution requires an std field")
+										.as_float()
+										.expect("The standard deviation must be provided as a float");
+
+						let mean = params.lookup("std")
+										 .expect("The normal distribution requires a mean field")
+										 .as_float()
+										 .expect("The standard deviation must be provided as a float");
+
+						Box::new(construct_normal_gen_client(mean, std, amount, run_period, frequency))
+					}
+					x => panic!("The provided generator type, {:?}, is not currently supported", x),
+				} ;
+				match &buf_option {
+					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false))),
+					None => panic!("Buffer and File manager provided not supported yet"),
+				}
+*/			}
 			x => panic!("The provided type, {:?}, is not currently supported", x),
 		}
 		signal_id += 1;

@@ -1,3 +1,6 @@
+use std::sync::mpsc::channel;
+use std::thread;
+use std::marker::PhantomData;
 use serde::de::DeserializeOwned;
 use std::sync::Mutex;
 use futures::stream::iter_ok;
@@ -18,12 +21,13 @@ use tokio::prelude::*;
 
 use crate::future_signal::BufferedSignal;
 
-
+#[derive(PartialEq)]
 pub enum Amount {
 	Limited (u64),
 	Unlimited,
 }
 
+#[derive(PartialEq)]
 pub enum RunPeriod {
 	Finite (Duration),
 	Indefinite,
@@ -198,16 +202,66 @@ pub fn construct_file_client_skip_newline<T>(file: &str, skip_val: usize, delim:
 	Ok(client_from_iter(producer, amount, run_period, frequency))
 }
 
+/* First approach at enabling a framework for random generation 
+ * Failed because f32 does not implement From<f64>
+ * This lack of implementation prevents coverting f64 values 
+ * which is the only type supported by rusts normal distribution
+ * So this framework won't work for a f32 database setting with a 
+ * normal distribution generator client
+ */
+pub struct BasicItemGenerator<T,U,V>
+	where V: From<T>,
+		  U: Distribution<T>,
+{
+	rng: SmallRng,
+	dist: U,
+	phantom1: PhantomData<T>,
+	phantom2: PhantomData<V>,
+}
 
-pub fn construct_gen_client<'a,T,U:'a,R>(dist: &'a T, rng: &'a mut R, 
+impl<T,U,V> BasicItemGenerator<T,U,V> 
+	where V: From<T>,
+		  U: Distribution<T>,
+{
+	pub fn new(dist: U) -> BasicItemGenerator<T,U,V> {
+		BasicItemGenerator {
+			rng: SmallRng::from_entropy(),
+			dist: dist,
+			phantom1: PhantomData,
+			phantom2: PhantomData,
+		}
+	}
+}
+
+impl<T,U,V> Iterator for BasicItemGenerator<T,U,V> 
+	where V: From<T>,
+		  U: Distribution<T>,
+{
+	type Item = V;
+
+	fn next(&mut self) -> Option<V> {
+		Some(self.dist.sample(&mut self.rng).into())
+	}
+}
+
+pub fn construct_gen_client<T,U,V>(dist: U, 
 		amount: Amount, run_period: RunPeriod, frequency: Frequency) 
-			-> impl Stream<Item=U,Error=()> + 'a
-		where R: Rng,
-		      T: Distribution<U>
+			-> impl Stream<Item=V,Error=()>
+		where V: From<T>,
+			  U: Distribution<T>,
 
 {
-	let producer = rng.sample_iter(dist);
+	let producer = BasicItemGenerator::new(dist);
 	client_from_iter(producer, amount, run_period, frequency)
+}
+
+pub fn construct_normal_gen_client<T>(mean: f64, std: f64, 
+	amount: Amount, run_period: RunPeriod, frequency: Frequency)
+		-> impl Stream<Item=T,Error=()> 
+	where T: From<f64>,
+{
+	let norm = Normal::new(mean, std);
+	construct_gen_client::<f64,Normal,T>(norm,amount,run_period,frequency)
 }
 
 #[test]
@@ -224,8 +278,18 @@ fn construct_client() {
 	let _sig1 = BufferedSignal::new(1, client, 400, buffer.clone(),|i,j| i >= j, |_| (), false);
 
 	let dist = Normal::new(0.0,1.0);
-	let mut rng = thread_rng();
-	let _std_norm_client = construct_gen_client(&dist, &mut rng, Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate);
+	let std_norm_client = construct_gen_client::<f64,Normal,f64>(dist, Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate);
+
+	let (tx,rx) = channel();
+
+	let _handler = thread::spawn(move || {
+		tx.send(std_norm_client)
+	});
+
+	let _receiver = thread::spawn(move || {
+		let _val = rx.recv();
+		println!("got it");
+	});
 
 	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");
 }
