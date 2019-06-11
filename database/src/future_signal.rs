@@ -1,25 +1,28 @@
 extern crate tokio;
 
-use crate::client::{construct_file_client,Amount,RunPeriod,Frequency};
-use std::sync::Mutex;
-use crate::buffer_pool::{SegmentBuffer,VDBufferPool};
-use crate::file_handler::{};
+use std::str::FromStr;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use crate::file_handler::FileManager;
+use crate::client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
+use std::sync::{Arc,Mutex};
+use crate::buffer_pool::{SegmentBuffer,ClockBuffer};
 use crate::segment::{Segment,SegmentKey};
 use std::time::SystemTime;
-use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration,Instant};
 use std::mem;
-use tokio::io;
 use tokio::prelude::*;
 use tokio::runtime::{Builder,Runtime};
 
 pub type SignalId = u64;
 
-pub struct Signal<T,U,F> 
+pub struct BufferedSignal<T,U,F,G> 
 	where T: Copy + Send,
 	      U: Stream,
 	      F: Fn(usize,usize) -> bool,
+	      G: Fn(&mut Segment<T>)
 {
+	start: Option<Instant>,
 	timestamp: Option<SystemTime>,
 	prev_seg_offset: Option<SystemTime>,
 	seg_size: usize,
@@ -28,22 +31,29 @@ pub struct Signal<T,U,F>
 	time_lapse: Vec<Duration>,
 	signal: U,
 	buffer: Arc<Mutex<SegmentBuffer<T> + Send + Sync>>,
-	split_decider: F
+	split_decider: F,
+	compress_func: G,
+	compress_on_segmentation: bool,
+	compression_percentage: f64,
+	segments_produced: u32,
 }
 
 /* Fix the buffer to not reuqire broad locking it */
-impl<T,U,F> Signal<T,U,F> 
+impl<T,U,F,G> BufferedSignal<T,U,F,G> 
 	where T: Copy + Send,
 		  U: Stream,
 		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>)
 {
 
 	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
 		buffer: Arc<Mutex<SegmentBuffer<T> + Send + Sync>>,
-		split_decider: F) 
-		-> Signal<T,U,F> 
+		split_decider: F, compress_func: G, 
+		compress_on_segmentation: bool) 
+		-> BufferedSignal<T,U,F,G> 
 	{
-		Signal {
+		BufferedSignal {
+			start: None,
 			timestamp: None,
 			prev_seg_offset: None,
 			seg_size: seg_size,
@@ -53,6 +63,156 @@ impl<T,U,F> Signal<T,U,F>
 			signal: signal,
 			buffer: buffer,
 			split_decider: split_decider,
+			compress_func: compress_func,
+			compress_on_segmentation: compress_on_segmentation,
+			compression_percentage: 0.0,
+			segments_produced: 0,
+		}
+	}
+
+}
+
+/* Currently just creates the segment and writes it to a buffer,
+   Potential improvements:
+   		1. Allow a method to be passed, that will be immediately applied to data
+   		2. Allow optional collection of time data for each value
+   		3. Allow a function that when passed a segment returns a boolean
+   			to indicate that it should be written immediately to file or buffer pool
+   		4. Allow function that determines what method to apply,
+   			Like a hashmap from signal id to a method enum that should
+   				be applied for that signal
+   		5. Allow early return/way for user to kill a signal without 
+   			having the signal neeed to exhaust the stream
+ */
+impl<T,U,F,G> Future for BufferedSignal<T,U,F,G> 
+	where T: Copy + Send,
+		  U: Stream<Item=T,Error=()>,
+		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>)
+{
+	type Item  = Option<SystemTime>;
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Option<SystemTime>,()> {
+		loop {
+			match self.signal.poll() {
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Ok(Async::Ready(None)) => {
+					let elapse: Duration = self.start.unwrap().elapsed();
+					if self.compress_on_segmentation {
+						let percentage = self.compression_percentage / (self.segments_produced as f64);
+						println!("Signal: {}\n Segments produced: {}\n Compression percentage: {}\n Time: {:?}", self.signal_id, self.segments_produced, percentage, elapse);
+					} else {
+						println!("Signal: {}\n Segments produced: {}\n Time: {:?}", self.signal_id, self.segments_produced, elapse);
+					}
+					
+					return Ok(Async::Ready(self.prev_seg_offset))
+				}
+				Err(e) => {
+					println!("The client signal produced an error: {:?}", e);
+					/* Implement an error log to indicate a dropped value */
+					/* Continue to run and silence the error for now */
+					return Err(e);
+				}
+				Ok(Async::Ready(Some(value))) => {
+
+					let cur_time    = SystemTime::now();
+					if let None = self.timestamp {
+						self.start = Some(Instant::now());
+						self.timestamp = Some(cur_time);
+					};
+
+					/* case where the value reaches split size */
+					if (self.split_decider)(self.data.len(), self.seg_size) {
+						let data = mem::replace(&mut self.data, Vec::with_capacity(self.seg_size));
+						let time_lapse = mem::replace(&mut self.time_lapse, Vec::with_capacity(self.seg_size));
+						let old_timestamp = mem::replace(&mut self.timestamp, Some(cur_time));
+						let prev_seg_offset = mem::replace(&mut self.prev_seg_offset, old_timestamp);
+						let dur_offset = match prev_seg_offset {
+							Some(t) => match old_timestamp.unwrap().duration_since(t) {
+								Ok(d) => Some(d),
+								Err(_) => panic!("Hard Failure, since messes up implicit chain"),
+							}
+							None => None,
+						};
+
+						let mut seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
+											   data, Some(time_lapse), dur_offset);
+						
+						if self.compress_on_segmentation {
+							let before = self.data.len() as f64;
+							(self.compress_func)(&mut seg);
+							let after = self.data.len() as f64;
+							self.compression_percentage += after/before;
+						}
+
+						match self.buffer.lock() {
+							Ok(mut buf) => match buf.put(seg) {
+								Ok(()) => (),
+								Err(e) => panic!("Failed to put segment in buffer: {:?}", e),
+							},
+							Err(_)  => panic!("Failed to acquire buffer write lock"),
+						}; /* Currently panics if can't get it */
+					}
+
+					/* Always add the newly received data  */
+					self.data.push(value);
+					self.segments_produced += 1;
+					match cur_time.duration_since(self.timestamp.unwrap()) {
+						Ok(d)  => self.time_lapse.push(d),
+						Err(_) => self.time_lapse.push(Duration::default()),
+					}
+				}
+			}	
+		}
+	}
+}
+
+pub struct NonStoredSignal<T,U,F,G> 
+	where T: Copy + Send,
+	      U: Stream,
+	      F: Fn(usize,usize) -> bool,
+	      G: Fn(&mut Segment<T>)
+{
+	timestamp: Option<SystemTime>,
+	prev_seg_offset: Option<SystemTime>,
+	seg_size: usize,
+	signal_id: SignalId,
+	data: Vec<T>,
+	time_lapse: Vec<Duration>,
+	signal: U,
+	split_decider: F,
+	compress_func: G,
+	compress_on_segmentation: bool,
+	compression_percentage: f64,
+	segments_produced: u64,
+}
+
+/* Fix the buffer to not reuqire broad locking it */
+impl<T,U,F,G> NonStoredSignal<T,U,F,G> 
+	where T: Copy + Send,
+		  U: Stream,
+		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>)
+{
+
+	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
+		split_decider: F, compress_func: G, compress_on_segmentation: bool) 
+		-> NonStoredSignal<T,U,F,G> 
+	{
+		NonStoredSignal {
+			timestamp: None,
+			prev_seg_offset: None,
+			seg_size: seg_size,
+			signal_id: signal_id,
+			data: Vec::with_capacity(seg_size),
+			time_lapse: Vec::with_capacity(seg_size),
+			signal: signal,
+			split_decider: split_decider,
+			compress_func: compress_func,
+			compress_on_segmentation: compress_on_segmentation,
+			segments_produced: 0,
+			compression_percentage: 0.0,
 		}
 	}
 }
@@ -69,10 +229,11 @@ impl<T,U,F> Signal<T,U,F>
    		5. Allow early return/way for user to kill a signal without 
    			having the signal neeed to exhaust the stream
  */
-impl<T,U,F> Future for Signal<T,U,F> 
+impl<T,U,F,G> Future for NonStoredSignal<T,U,F,G> 
 	where T: Copy + Send,
 		  U: Stream<Item=T,Error=()>,
 		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>)
 {
 	type Item  = Option<SystemTime>;
 	type Error = ();
@@ -81,7 +242,16 @@ impl<T,U,F> Future for Signal<T,U,F>
 		loop {
 			match self.signal.poll() {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(self.prev_seg_offset)),
+				Ok(Async::Ready(None)) => {
+					if self.compress_on_segmentation {
+						let percentage = self.compression_percentage / (self.segments_produced as f64);
+						println!("Signal {} produced {} segments with a compression percentage of {}", self.signal_id, self.segments_produced, percentage);
+					} else {
+						println!("Signal {} produced {} segments", self.signal_id, self.segments_produced);
+					}
+					
+					return Ok(Async::Ready(self.prev_seg_offset))
+				}
 				Err(e) => {
 					println!("The client signal produced an error: {:?}", e);
 					/* Implement an error log to indicate a dropped value */
@@ -108,20 +278,20 @@ impl<T,U,F> Future for Signal<T,U,F>
 							None => None,
 						};
 
-						let seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
-											   data, time_lapse, dur_offset);
+						let mut seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
+											   data, Some(time_lapse), dur_offset);
 
-						match self.buffer.lock() {
-							Ok(mut buf) => match buf.put(seg) {
-								Ok(()) => (),
-								Err(e) => panic!("Failed to put segment in buffer: {:?}", e),
-							},
-							Err(_)  => panic!("Failed to acquire buffer write lock"),
-						}; /* Currently panics if can't get it */
+						if self.compress_on_segmentation {
+							let before = self.data.len() as f64;
+							(self.compress_func)(&mut seg);
+							let after = self.data.len() as f64;
+							self.compression_percentage += after/before;
+						}
 					}
 
 					/* Always add the newly received data  */
 					self.data.push(value);
+					self.segments_produced += 1;
 					match cur_time.duration_since(self.timestamp.unwrap()) {
 						Ok(d)  => self.time_lapse.push(d),
 						Err(_) => self.time_lapse.push(Duration::default()),
@@ -132,6 +302,158 @@ impl<T,U,F> Future for Signal<T,U,F>
 	}
 }
 
+pub struct StoredSignal<T,U,F,G,V> 
+	where T: Copy + Send + Serialize + DeserializeOwned,
+	      U: Stream,
+	      F: Fn(usize,usize) -> bool,
+	      G: Fn(&mut Segment<T>),
+	      V: AsRef<[u8]>,
+{
+	timestamp: Option<SystemTime>,
+	prev_seg_offset: Option<SystemTime>,
+	seg_size: usize,
+	signal_id: SignalId,
+	data: Vec<T>,
+	time_lapse: Vec<Duration>,
+	signal: U,
+	fm: Arc<Mutex<FileManager<Vec<u8>,V> + Send + Sync>>,
+	split_decider: F,
+	compress_func: G,
+	compress_on_segmentation: bool,
+	compression_percentage: f64,
+	segments_produced: u64,
+}
+
+/* Fix the buffer to not reuqire broad locking it */
+impl<T,U,F,G,V> StoredSignal<T,U,F,G,V> 
+	where T: Copy + Send + Serialize + DeserializeOwned,
+		  U: Stream,
+		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>),
+		  V: AsRef<[u8]>,
+{
+
+	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
+		fm: Arc<Mutex<FileManager<Vec<u8>,V> + Send + Sync>>,
+		split_decider: F, compress_func: G, 
+		compress_on_segmentation: bool) 
+		-> StoredSignal<T,U,F,G,V> 
+	{
+		StoredSignal {
+			timestamp: None,
+			prev_seg_offset: None,
+			seg_size: seg_size,
+			signal_id: signal_id,
+			data: Vec::with_capacity(seg_size),
+			time_lapse: Vec::with_capacity(seg_size),
+			signal: signal,
+			fm: fm,
+			split_decider: split_decider,
+			compress_func: compress_func,
+			compress_on_segmentation: compress_on_segmentation,
+			compression_percentage: 0.0,
+			segments_produced: 0,
+		}
+	}
+}
+
+/* Currently just creates the segment and writes it to a buffer,
+   Potential improvements:
+   		1. Allow a method to be passed, that will be immediately applied to data
+   		2. Allow optional collection of time data for each value
+   		3. Allow a function that when passed a segment returns a boolean
+   			to indicate that it should be written immediately to file or buffer pool
+   		4. Allow function that determines what method to apply,
+   			Like a hashmap from signal id to a method enum that should
+   				be applied for that signal
+   		5. Allow early return/way for user to kill a signal without 
+   			having the signal neeed to exhaust the stream
+ */
+impl<T,U,F,G,V> Future for StoredSignal<T,U,F,G,V> 
+	where T: Copy + Send + Serialize + DeserializeOwned + FromStr,
+		  U: Stream<Item=T,Error=()>,
+		  F: Fn(usize,usize) -> bool,
+		  G: Fn(&mut Segment<T>),
+		  V: AsRef<[u8]>,
+{
+	type Item  = Option<SystemTime>;
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Option<SystemTime>,()> {
+		loop {
+			match self.signal.poll() {
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Ok(Async::Ready(None)) => {
+					if self.compress_on_segmentation {
+						let percentage = self.compression_percentage / (self.segments_produced as f64);
+						println!("Signal {} produced {} segments with a compression percentage of {}", self.signal_id, self.segments_produced, percentage);
+					} else {
+						println!("Signal {} produced {} segments", self.signal_id, self.segments_produced);
+					}
+					
+					return Ok(Async::Ready(self.prev_seg_offset))
+				}
+				Err(e) => {
+					println!("The client signal produced an error: {:?}", e);
+					/* Implement an error log to indicate a dropped value */
+					/* Continue to run and silence the error for now */
+				}
+				Ok(Async::Ready(Some(value))) => {
+
+					let cur_time    = SystemTime::now();
+					if let None = self.timestamp {
+						self.timestamp = Some(cur_time);
+					};
+
+					/* case where the value reaches split size */
+					if (self.split_decider)(self.data.len(), self.seg_size) {
+						let data = mem::replace(&mut self.data, Vec::with_capacity(self.seg_size));
+						let time_lapse = mem::replace(&mut self.time_lapse, Vec::with_capacity(self.seg_size));
+						let old_timestamp = mem::replace(&mut self.timestamp, Some(cur_time));
+						let prev_seg_offset = mem::replace(&mut self.prev_seg_offset, old_timestamp);
+						let dur_offset = match prev_seg_offset {
+							Some(t) => match old_timestamp.unwrap().duration_since(t) {
+								Ok(d) => Some(d),
+								Err(_) => panic!("Hard Failure, since messes up implicit chain"),
+							}
+							None => None,
+						};
+
+						let mut seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
+											   data, Some(time_lapse), dur_offset);
+						
+						if self.compress_on_segmentation {
+							let before = self.data.len() as f64;
+							(self.compress_func)(&mut seg);
+							let after = self.data.len() as f64;
+							self.compression_percentage += after/before;
+						}
+
+						match self.fm.lock() {
+							Ok(fm) => {
+								let key_bytes = seg.get_key().convert_to_bytes().expect("The segment key should be byte convertible");
+								let seg_bytes = seg.convert_to_bytes().expect("The segment should be byte convertible");
+								match fm.fm_write(key_bytes, seg_bytes) {
+									Ok(()) => (),
+									Err(e) => panic!("Failed to put segment in buffer: {:?}", e),
+								}
+							}
+							Err(_)  => panic!("Failed to acquire buffer write lock"),
+						}; /* Currently panics if can't get it */
+					}
+
+					/* Always add the newly received data  */
+					self.data.push(value);
+					self.segments_produced += 1;
+					match cur_time.duration_since(self.timestamp.unwrap()) {
+						Ok(d)  => self.time_lapse.push(d),
+						Err(_) => self.time_lapse.push(Duration::default()),
+					}
+				}
+			}	
+		}
+	}
+}
 
 #[test]
 fn run_dual_signals() {
@@ -142,24 +464,24 @@ fn run_dual_signals() {
 		Err(e) => panic!("Failed to create database: {:?}", e),
 	};
 
-	let buffer: Arc<Mutex<VDBufferPool<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(VDBufferPool::new(50,fm)));
-	let client1 = match construct_file_client::<f32>(
+	let buffer: Arc<Mutex<ClockBuffer<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(ClockBuffer::new(50,fm)));
+	let client1 = match construct_file_client_skip_newline::<f32>(
 						"../UCRArchive2018/Ham/Ham_TEST", 1, ',',
-						 Amount::Unlimited, RunPeriod::Indefinite, None)
+						 Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate)
 	{
 		Ok(x) => x,
 		Err(_) => panic!("Failed to create client1"),
 	};
-	let client2 = match construct_file_client::<f32>(
+	let client2 = match construct_file_client_skip_newline::<f32>(
 						"../UCRArchive2018/Fish/Fish_TEST", 1, ',',
-						 Amount::Unlimited, RunPeriod::Indefinite, None) 
+						 Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate) 
 	{
 		Ok(x) => x,
 		Err(_) => panic!("Failed to create client2"),
 	};
 
-	let sig1 = Signal::new(1, client1, 400, buffer.clone(), |i,j| i >= j);
-	let sig2 = Signal::new(2, client2, 600, buffer.clone(), |i,j| i >= j);
+	let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false);
+	let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false);
 
 	let mut rt = match Builder::new().build() {
 		Ok(rt) => rt,

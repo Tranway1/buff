@@ -61,10 +61,12 @@ pub enum Error {
 }
 
 
-impl FileManager<Vec<u8>,DBVector> for rocksdb::DB
+impl<T,U> FileManager<T,U> for rocksdb::DB
+	where T: AsRef<[u8]>,
+	      U: AsRef<[u8]> + From<DBVector>,
 {
 	#[inline]
-	fn fm_write(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(),Error> {
+	fn fm_write(&self, key: T, value: T) -> Result<(),Error> {
 		match self.put(key,value) {
 			Err(e) => Err(Error::DbError(e)),
 			Ok(_)  => Ok(()),
@@ -72,9 +74,9 @@ impl FileManager<Vec<u8>,DBVector> for rocksdb::DB
 	}
 
 	#[inline]
-	fn fm_get(&self, key: Vec<u8>) -> Result<Option<DBVector>,Error> {
+	fn fm_get(&self, key: T) -> Result<Option<U>,Error> {
 		match self.get(key) {
-			Ok(Some(x)) => Ok(Some(x)),
+			Ok(Some(x)) => Ok(Some(x.into())),
 			Ok(None)    => Ok(None),
 			Err(e)      => Err(Error::DbError(e)),
 		}
@@ -88,7 +90,7 @@ impl FileManager<Vec<u8>,DBVector> for rocksdb::DB
 
 const FILEPATH: &str = "../rocksdb";
 
-fn read_write_validate<'a,T:Send>(fm: &rocksdb::DB, seg: &Segment<T>) -> DBVector
+fn read_write_validate<'a,T:Send>(fm: &FileManager<Vec<u8>,DBVector>, seg: &Segment<T>) -> DBVector
 	where T: Clone + Serialize + Deserialize<'a> + Debug + PartialEq
 {
 	let seg_key = seg.get_key();
@@ -137,7 +139,7 @@ fn read_write_test() {
 	let sizes: Vec<usize> = vec![10,100,1024,5000];
 	let segs: Vec<Segment<f32>> = sizes.into_iter().map(move |x| {
 		Segment::new(None, SystemTime::now(), x as u64, 
-			random_f32signal(x), vec![], None,
+			random_f32signal(x), None, None,
 		)}).collect();
 
 	for seg in segs {

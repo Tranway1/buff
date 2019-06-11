@@ -1,3 +1,4 @@
 /target
 **/*.rs.bk
-src/config.toml
+config.toml
+test_configs

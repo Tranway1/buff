@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use std::sync::Mutex;
 use futures::stream::iter_ok;
 use tokio::timer::Interval;
@@ -11,11 +12,11 @@ use rand::distributions::*;
 use rand::prelude::*;
 
 use std::sync::RwLock;
-use crate::buffer_pool::VDBufferPool;
+use crate::buffer_pool::ClockBuffer;
 use std::sync::Arc;
 use tokio::prelude::*;
 
-use crate::future_signal::Signal;
+use crate::future_signal::BufferedSignal;
 
 
 pub enum Amount {
@@ -45,17 +46,11 @@ pub struct Client<T,U>
 	produced: Option<u64>,
 }
 
-	
 pub fn client_from_stream<T,U>(producer: T, amount: Amount, run_period: RunPeriod,
-			   interval_args: Option<(Instant,Duration)>)
+			   frequency: Frequency)
 			    -> impl Stream<Item=U,Error=()>
 	where T: Stream<Item=U,Error=()>,
 {
-	let frequency = match interval_args {
-		Some((start,dur)) => Frequency::Delayed(Interval::new(start,dur)),
-		None => Frequency::Immediate,
-	};
-
 	let produced = match amount {
 		Amount::Limited(_) => Some(0),
 		Amount::Unlimited  => None,
@@ -72,15 +67,10 @@ pub fn client_from_stream<T,U>(producer: T, amount: Amount, run_period: RunPerio
 }
 
 pub fn client_from_iter<T,U>(producer: T, amount: Amount, run_period: RunPeriod,
-				   interval_args: Option<(Instant,Duration)>)
+				   frequency: Frequency)
 				    -> impl Stream<Item=U,Error=()>
 	where T: Iterator<Item=U>
 {
-	let frequency = match interval_args {
-		Some((start,dur)) => Frequency::Delayed(Interval::new(start,dur)),
-		None => Frequency::Immediate,
-	};
-
 	let produced = match amount {
 		Amount::Limited(_) => Some(0),
 		Amount::Unlimited  => None,
@@ -147,10 +137,27 @@ impl<T,U> Stream for Client<T,U>
 	}
 }
 
+fn construct_file_iterator<T>(file: &str, delim: u8) -> Result<impl Iterator<Item=T>,()> 
+	where T: DeserializeOwned
+{
+	let f = match File::open(file) {
+		Ok(f) => f,
+		Err(_) => return Err(()),
+	};
+
+	Ok(BufReader::new(f)
+		.split(delim)
+		.filter_map(|x| match x {
+			Ok(val) => bincode::deserialize(&val).ok(),
+			_ => None
+		})
+	)
+}
+
 /* Must use type annotation on function to declare what to 
  * parse CSV entries as 
  */
-fn construct_file_iterator<T>(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=T>,()> 
+fn construct_file_iterator_skip_newline<T>(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=T>,()> 
 	where T: FromStr
 {
 	let f = match File::open(file) {
@@ -171,26 +178,36 @@ fn construct_file_iterator<T>(file: &str, skip_val: usize, delim: char) -> Resul
 	)
 }
 
+
+pub fn construct_file_client<T>(file: &str, delim: u8, amount: Amount, 
+						 run_period: RunPeriod, frequency: Frequency)
+						 -> Result<impl Stream<Item=T,Error=()>,()> 
+	where T: DeserializeOwned
+{
+	let producer = construct_file_iterator::<T>(file, delim)?;
+	Ok(client_from_iter(producer, amount, run_period, frequency))
+}
+
 /* An example of how to combine an iterator and IterClient constructor */
-pub fn construct_file_client<T>(file: &str, skip_val: usize, delim: char, amount: Amount, run_period: RunPeriod,
-				   		 interval_args: Option<(Instant,Duration)>)
+pub fn construct_file_client_skip_newline<T>(file: &str, skip_val: usize, delim: char, amount: Amount, run_period: RunPeriod,
+				   		 frequency: Frequency)
 				    	 -> Result<impl Stream<Item=T,Error=()>,()>
 	where T: FromStr,
 {
-	let producer = construct_file_iterator::<T>(file, skip_val, delim)?;
-	Ok(client_from_iter(producer, amount, run_period, interval_args))
+	let producer = construct_file_iterator_skip_newline::<T>(file, skip_val, delim)?;
+	Ok(client_from_iter(producer, amount, run_period, frequency))
 }
 
 
 pub fn construct_gen_client<'a,T,U:'a,R>(dist: &'a T, rng: &'a mut R, 
-		amount: Amount, run_period: RunPeriod, interval_args: Option<(Instant,Duration)>) 
+		amount: Amount, run_period: RunPeriod, frequency: Frequency) 
 			-> impl Stream<Item=U,Error=()> + 'a
 		where R: Rng,
 		      T: Distribution<U>
 
 {
 	let producer = rng.sample_iter(dist);
-	client_from_iter(producer, amount, run_period, interval_args)
+	client_from_iter(producer, amount, run_period, frequency)
 }
 
 #[test]
@@ -202,13 +219,13 @@ fn construct_client() {
 		Err(e) => panic!("Failed to create database: {:?}", e),
 	};
 
-	let client = construct_file_client::<f32>("../UCRArchive2018/Ham/Ham_TEST", 1, ',', Amount::Unlimited, RunPeriod::Indefinite, None).unwrap();
-	let buffer: Arc<Mutex<VDBufferPool<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(VDBufferPool::new(500,fm)));
-	let _sig1 = Signal::new(1, client, 400, buffer.clone(),|i,j| i >= j);
+	let client = construct_file_client_skip_newline::<f32>("../UCRArchive2018/Ham/Ham_TEST", 1, ',', Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate).unwrap();
+	let buffer: Arc<Mutex<ClockBuffer<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(ClockBuffer::new(500,fm)));
+	let _sig1 = BufferedSignal::new(1, client, 400, buffer.clone(),|i,j| i >= j, |_| (), false);
 
 	let dist = Normal::new(0.0,1.0);
 	let mut rng = thread_rng();
-	let _std_norm_client = construct_gen_client(&dist, &mut rng, Amount::Unlimited, RunPeriod::Indefinite, None);
+	let _std_norm_client = construct_gen_client(&dist, &mut rng, Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate);
 
 	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");
 }

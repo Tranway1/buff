@@ -73,14 +73,14 @@ pub struct Segment<T> {
 	timestamp: SystemTime,
 	signal: SignalId,
 	data: Vec<T>,
-	time_lapse: Vec<Duration>,
+	time_lapse: Option<Vec<Duration>>,
 	prev_seg_offset: Option<Duration>,
 	//next_seg_offset: Option<Duration>,
 }
 
 impl<T> Segment<T> {
 	pub fn new(method: Option<Methods>, timestamp: SystemTime, signal: SignalId,
-	    data: Vec<T>, time_lapse: Vec<Duration>, next_seg_offset: Option<Duration>) -> Segment<T> {
+	    data: Vec<T>, time_lapse: Option<Vec<Duration>>, next_seg_offset: Option<Duration>) -> Segment<T> {
 		
 		Segment {
 			method: method,
@@ -314,30 +314,41 @@ impl<'a,T> ComplexDef<T>
  **********************PAA  Implementation**********************
  ***************************************************************/
 
-impl<T> Segment<T> 
-	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive,
+/* Performs paa compression on the data carried by the segment */
+pub fn paa_compress_and_retain<T>(seg: &Segment<T>, chunk_size: usize) -> Segment<T> 
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive
 {
-	/* Performs paa compression on the data carried by the segment */
-	pub fn paa_compress(&self, chunk_size: usize) -> Segment<T> {
 
-		let zero = T::zero();
-		let paa_data = self.data.chunks(chunk_size)
-								.map(|x| {
-									x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
-								})
-								.collect();
+	let zero = T::zero();
+	let paa_data = seg.data.chunks(chunk_size)
+						   .map(|x| {
+						   		x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
+						   })
+						   .collect();
 
-		Segment {
-			method: None,
-			timestamp: self.timestamp,
-			signal: self.signal,
-			data: paa_data,
-			time_lapse: self.time_lapse.clone(),
-			prev_seg_offset: self.prev_seg_offset,
-		}	
-	}
+	Segment {
+		method: None,
+		timestamp: seg.timestamp,
+		signal: seg.signal,
+		data: paa_data,
+		time_lapse: seg.time_lapse.clone(),
+		prev_seg_offset: seg.prev_seg_offset,
+	}	
+}
 
+/* Performs paa compression on the data carried by the segment */
+pub fn paa_compress<T>(seg: &mut Segment<T>, chunk_size: usize)
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive
+{
 
+	let zero = T::zero();
+	let paa_data = seg.data.chunks(chunk_size)
+						   .map(|x| {
+								x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
+						   })
+						   .collect();
+
+	seg.data = paa_data	
 }
 
 /***************************************************************
@@ -436,7 +447,7 @@ fn test_fourier_compression() {
 						-0.934893301,-0.938107111,-0.941129051,-0.944043071,-0.946063691,-0.947907441,-0.949688231,-0.950962361,-0.952008651,-0.953171851,-0.954431001,-0.956025911,
 						-0.957141151,-0.958265391,-0.959446581,-0.960726711,-0.962213701,-0.963790621,-0.964902871,-0.964471161,-0.965019791,-0.966054081,-0.966018111,-0.966335891,
 						-0.967106371,-0.967484111,-0.967454131,-0.967816881,-0.968638321,-0.969141981,-0.969540711,-0.970344161,-0.970377141];
-	let init_seg = Segment::new(None, SystemTime::now(),0,data, vec![], None);
+	let init_seg = Segment::new(None, SystemTime::now(),0,data, Some(vec![]), None);
 	let compressed_seg = init_seg.fourier_compress();
 	let decompressed_seg = compressed_seg.fourier_decompress();
 
@@ -454,7 +465,7 @@ fn test_complex_segment_byte_conversion() {
 			timestamp: SystemTime::now(),
 			signal: 0,
 			data: random_f32complex_signal(x),
-			time_lapse: vec![],
+			time_lapse: Some(vec![]),
 			prev_seg_offset: None,
 		}).collect();
 
@@ -484,7 +495,7 @@ fn test_segment_byte_conversion() {
 			timestamp: SystemTime::now(),
 			signal: 0,
 			data: random_f32signal(x),
-			time_lapse: vec![],
+			time_lapse: Some(vec![]),
 			prev_seg_offset: None,
 		}).collect();
 
@@ -521,16 +532,16 @@ fn test_paa_compression() {
 				timestamp: SystemTime::now(),
 				signal: 0,
 				data: data,
-				time_lapse: vec![],
+				time_lapse: Some(vec![]),
 				prev_seg_offset: None,
 			};
 
 	let seg2 = seg1.clone();
 	let seg3 = seg1.clone();
 
-	let paa_seg1 = seg1.paa_compress(3);
-	let paa_seg2 = seg2.paa_compress(7);
-	let paa_seg3 = seg3.paa_compress(10);
+	let paa_seg1 = paa_compress_and_retain(&seg1,3);
+	let paa_seg2 = paa_compress_and_retain(&seg2,7);
+	let paa_seg3 = paa_compress_and_retain(&seg3,10);
 
 	compare_vectors(&paa_seg3.data, &vec![-3.2146803177212875, -0.15185342178258382, -4.585896903804042, 2.6327921846859317, -1.2660067881155765, -2.952418330360052, 2.4719177593168036,
 								   -1.2701002334142735, 1.8721138558253496, -0.07421490250367953]);
@@ -546,17 +557,16 @@ fn test_paa_compression() {
 #[test]
 fn test_implicit_key_list() {
 	let data: Vec<f32> = vec![1.0,2.0,3.0];
-	let lapse: Vec<Duration> = vec![];
 	let timestamp = SystemTime::now();
-	let sig0seg1 = Segment::new(None,timestamp,0,data.clone(),lapse.clone(),None);
-	let sig0seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(15,0)));
-	let sig0seg3 = Segment::new(None,timestamp + Duration::new(18,0),0,data.clone(),lapse.clone(),Some(Duration::new(3,0)));
-	let sig0seg4 = Segment::new(None,timestamp + Duration::new(34,0),0,data.clone(),lapse.clone(),Some(Duration::new(16,0)));
+	let sig0seg1 = Segment::new(None,timestamp,0,data.clone(),None,None);
+	let sig0seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),None,Some(Duration::new(15,0)));
+	let sig0seg3 = Segment::new(None,timestamp + Duration::new(18,0),0,data.clone(),None,Some(Duration::new(3,0)));
+	let sig0seg4 = Segment::new(None,timestamp + Duration::new(34,0),0,data.clone(),None,Some(Duration::new(16,0)));
 
-	let sig1seg1 = Segment::new(None,timestamp + Duration::new(10,0),0,data.clone(),lapse.clone(),None);
-	let sig1seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),lapse.clone(),Some(Duration::new(5,0)));
-	let sig1seg3 = Segment::new(None,timestamp + Duration::new(35,0),0,data.clone(),lapse.clone(),Some(Duration::new(20,0)));
-	let sig1seg4 = Segment::new(None,timestamp + Duration::new(135,0),0,data.clone(),lapse.clone(),Some(Duration::new(100,0)));
+	let sig1seg1 = Segment::new(None,timestamp + Duration::new(10,0),0,data.clone(),None,None);
+	let sig1seg2 = Segment::new(None,timestamp + Duration::new(15,0),0,data.clone(),None,Some(Duration::new(5,0)));
+	let sig1seg3 = Segment::new(None,timestamp + Duration::new(35,0),0,data.clone(),None,Some(Duration::new(20,0)));
+	let sig1seg4 = Segment::new(None,timestamp + Duration::new(135,0),0,data.clone(),None,Some(Duration::new(100,0)));
 
 	assert_eq!(sig0seg4.get_prev_key(), Some(sig0seg3.get_key()));
 	assert_eq!(sig0seg3.get_prev_key(), Some(sig0seg2.get_key()));

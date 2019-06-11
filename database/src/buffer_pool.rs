@@ -98,7 +98,7 @@ pub enum BufErr {
 /* Look into fixed vec deque or concurrent crates if poor performance */
 
 #[derive(Debug)]
-pub struct VDBufferPool<T,U> 
+pub struct ClockBuffer<T,U> 
 	where T: Copy + Send,
 		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
 {
@@ -111,7 +111,7 @@ pub struct VDBufferPool<T,U>
 }
 
 
-impl<T,U> SegmentBuffer<T> for VDBufferPool<T,U> 
+impl<T,U> SegmentBuffer<T> for ClockBuffer<T,U> 
 	where T: Copy + Send + Serialize + DeserializeOwned + Debug,
 		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
 {
@@ -181,12 +181,12 @@ impl<T,U> SegmentBuffer<T> for VDBufferPool<T,U>
 }
 
 
-impl<T,U> VDBufferPool<T,U> 
+impl<T,U> ClockBuffer<T,U> 
 	where T: Copy + Send + Serialize + DeserializeOwned + Debug,
 		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
 {
-	pub fn new(buf_size: usize, file_manager: U) -> VDBufferPool<T,U> {
-		VDBufferPool {
+	pub fn new(buf_size: usize, file_manager: U) -> ClockBuffer<T,U> {
+		ClockBuffer {
 			hand: 0,
 			buffer: HashMap::with_capacity(buf_size),
 			clock: Vec::with_capacity(buf_size),
@@ -289,6 +289,129 @@ impl<T,U> VDBufferPool<T,U>
 					Err(_) => return Err(BufErr::FileManagerErr),
 				}
 
+			} else {
+				self.clock[self.hand].1 = false;
+			} 
+
+			self.update_hand();
+		}
+	}
+}
+
+
+#[derive(Debug)]
+pub struct NoFmClockBuffer<T> 
+	where T: Copy + Send,
+{
+	hand: usize,
+	buffer: HashMap<SegmentKey,Segment<T>>,
+	clock: Vec<(SegmentKey,bool)>,
+	clock_map: HashMap<SegmentKey,usize>,
+	buf_size: usize,
+}
+
+
+impl<T> SegmentBuffer<T> for NoFmClockBuffer<T> 
+	where T: Copy + Send + Debug,
+{
+
+	fn get(&mut self, _key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr> {		
+		unimplemented!()
+	}
+
+	fn get_mut(&mut self, _key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr> {
+		unimplemented!()
+	}
+
+	#[inline]
+	fn put(&mut self, seg: Segment<T>) -> Result<(), BufErr> {
+		let seg_key = seg.get_key();
+		self.put_with_key(seg_key, seg)
+	}
+
+
+	fn drain(&mut self) -> Drain<Segment<T>> {
+		unimplemented!()
+	}
+
+	fn copy(&self) -> Vec<Segment<T>> {
+		self.buffer.values().map(|x| x.clone()).collect()
+	}
+
+	/* Write to file system */
+	fn persist(&self) -> Result<(),BufErr> {
+		unimplemented!()
+	}
+
+	fn flush(&mut self) {
+		self.buffer.clear();
+		self.clock.clear();
+	}
+}
+
+
+impl<T> NoFmClockBuffer<T> 
+	where T: Copy + Send + Debug,
+{
+	pub fn new(buf_size: usize) -> NoFmClockBuffer<T> {
+		NoFmClockBuffer {
+			hand: 0,
+			buffer: HashMap::with_capacity(buf_size),
+			clock: Vec::with_capacity(buf_size),
+			clock_map: HashMap::with_capacity(buf_size),
+			buf_size: buf_size,
+		}
+	}
+
+	/* Assumes that the segment is in memory and will panic otherwise */
+	#[inline]
+	fn update(&mut self, key: SegmentKey) {
+		let key_idx: usize = *self.clock_map.get(&key).unwrap();
+		self.clock[key_idx].1 = false;
+	}
+
+	#[inline]
+	fn update_hand(&mut self) {
+		self.hand = (self.hand + 1) % self.buf_size;
+	}
+
+	fn put_with_key(&mut self, key: SegmentKey, seg: Segment<T>) -> Result<(), BufErr> {
+		let slot = if self.buffer.len() >= self.buf_size {
+			let slot = self.evict()?;
+			self.clock[slot] = (key,true);
+			slot
+		} else {
+			let slot = self.hand;
+			self.clock.push((key,true));
+			self.update_hand();
+			slot
+		};
+
+		
+		match self.clock_map.insert(key,slot) {
+			None => (),
+			_ => return Err(BufErr::NonUniqueKey),
+		}
+		match self.buffer.entry(key) {
+			Entry::Occupied(_) => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+			Entry::Vacant(vacancy) => {
+				vacancy.insert(seg);
+				Ok(())
+			}
+		}
+	}
+
+	fn evict(&mut self) -> Result<usize,BufErr> {
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				let _seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => return Err(BufErr::EvictFailure),
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
 			} else {
 				self.clock[self.hand].1 = false;
 			} 
