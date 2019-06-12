@@ -155,5 +155,10 @@ fn read_write_test() {
 		}
 	}
 
-	let _ = rocksdb::DB::destroy(&db_opts, FILEPATH);
+	drop(fm);
+
+	match rocksdb::DB::destroy(&db_opts, FILEPATH) {
+		Ok(()) => (),
+		Err(e) => panic!("Failed to destroy db: {:?}", e),
+	}
 }

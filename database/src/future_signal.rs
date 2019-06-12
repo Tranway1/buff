@@ -542,5 +542,4 @@ fn run_dual_signals() {
 		_   => panic!("Incorrect number of segments produced"),
 	}
 
-	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");	
 }

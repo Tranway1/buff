@@ -202,6 +202,7 @@ pub fn construct_file_client_skip_newline<T>(file: &str, skip_val: usize, delim:
 	Ok(client_from_iter(producer, amount, run_period, frequency))
 }
 
+
 /* First approach at enabling a framework for random generation 
  * Failed because f32 does not implement From<f64>
  * This lack of implementation prevents coverting f64 values 
@@ -255,13 +256,45 @@ pub fn construct_gen_client<T,U,V>(dist: U,
 	client_from_iter(producer, amount, run_period, frequency)
 }
 
+pub struct NormalDistItemGenerator<V>
+	where V: From<f32>,
+{
+	rng: SmallRng,
+	dist: Normal,
+	phantom: PhantomData<V>,
+}
+
+impl<V> NormalDistItemGenerator<V> 
+	where V: From<f32>,
+{
+	pub fn new(mean: f64, std: f64) -> NormalDistItemGenerator<V> {
+		NormalDistItemGenerator {
+			rng: SmallRng::from_entropy(),
+			dist: Normal::new(mean,std),
+			phantom: PhantomData,
+		}
+	}
+}
+
+impl<V> Iterator for NormalDistItemGenerator<V> 
+	where V: From<f32>,
+{
+	type Item = V;
+
+	fn next(&mut self) -> Option<V> {
+		Some((self.dist.sample(&mut self.rng) as f32).into())
+	}
+}
+
+
+
 pub fn construct_normal_gen_client<T>(mean: f64, std: f64, 
 	amount: Amount, run_period: RunPeriod, frequency: Frequency)
 		-> impl Stream<Item=T,Error=()> 
-	where T: From<f64>,
+	where T: From<f32>,
 {
-	let norm = Normal::new(mean, std);
-	construct_gen_client::<f64,Normal,T>(norm,amount,run_period,frequency)
+	let producer = NormalDistItemGenerator::<T>::new(mean,std);
+	client_from_iter(producer, amount, run_period, frequency)
 }
 
 #[test]
@@ -291,5 +324,4 @@ fn construct_client() {
 		println!("got it");
 	});
 
-	let _ = rocksdb::DB::destroy(&db_opts, "../rocksdb");
 }

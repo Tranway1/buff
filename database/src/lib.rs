@@ -5,6 +5,7 @@ extern crate bincode;
 extern crate futures;
 extern crate toml_loader;
 
+use rand::distributions::Uniform;
 use crate::client::construct_normal_gen_client;
 use crate::client::construct_gen_client;
 use std::time::SystemTime;
@@ -42,7 +43,7 @@ const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';
 
 pub fn run_test<T: 'static>(config_file: &str) 
-	where T: Copy + Send + Sync + Serialize + DeserializeOwned + Debug + FromStr,
+	where T: Copy + Send + Sync + Serialize + DeserializeOwned + Debug + FromStr + From<f32>,
 {
 
 	let config = match Loader::from_file(Path::new(config_file)) {
@@ -69,10 +70,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 					let mut db_opts = rocksdb::Options::default();
 					db_opts.create_if_missing(true);
 					match rocksdb::DB::open(&db_opts, path) {
-						Ok(x) =>  {
-							let boxed_x = Box::new(x);
-							Some(boxed_x)
-						}
+						Ok(x) => Some(Box::new(x)),
 						Err(e) => panic!("Failed to create RocksFM object: {:?}", e),
 					}
 				}
@@ -233,8 +231,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 							    If this is what you want, then create the never_die field under this client and set the value to true");
 					}
 				}
-				let _params = client_config.lookup("params").expect("The generator client type requires a params table");
-/*				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
+				let params = client_config.lookup("params").expect("The generator client type requires a params table");
+				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
 								   .expect("The gen client must be provided a gen type field")
 								   .as_str()
 								   .expect("The gen type must be provided as a string") 
@@ -248,17 +246,32 @@ pub fn run_test<T: 'static>(config_file: &str)
 						let mean = params.lookup("std")
 										 .expect("The normal distribution requires a mean field")
 										 .as_float()
-										 .expect("The standard deviation must be provided as a float");
+										 .expect("The mean must be provided as a float");
 
 						Box::new(construct_normal_gen_client(mean, std, amount, run_period, frequency))
 					}
+					"uniform" => {
+						let low = params.lookup("low")
+										.expect("The uniform distribution requires a low field")
+										.as_float()
+										.expect("The lower end value of the uniform dist must be provided as a float") as f32;
+
+						let high = params.lookup("high")
+									   .expect("The uniform distribution requires a high field")
+									   .as_float()
+									   .expect("The higher end value of the uniform dist must be provided as a float") as f32;
+
+						let dist = Uniform::new(low,high);
+
+						Box::new(construct_gen_client::<f32,Uniform<f32>,T>(dist, amount, run_period, frequency))
+					}
 					x => panic!("The provided generator type, {:?}, is not currently supported", x),
-				} ;
+				};
 				match &buf_option {
 					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false))),
 					None => panic!("Buffer and File manager provided not supported yet"),
 				}
-*/			}
+			}
 			x => panic!("The provided type, {:?}, is not currently supported", x),
 		}
 		signal_id += 1;
