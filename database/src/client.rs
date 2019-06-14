@@ -296,32 +296,3 @@ pub fn construct_normal_gen_client<T>(mean: f64, std: f64,
 	let producer = NormalDistItemGenerator::<T>::new(mean,std);
 	client_from_iter(producer, amount, run_period, frequency)
 }
-
-#[test]
-fn construct_client() {
-	let mut db_opts = rocksdb::Options::default();
-	db_opts.create_if_missing(true);
-	let fm = match rocksdb::DB::open(&db_opts, "../rocksdb") {
-		Ok(x) => x,
-		Err(e) => panic!("Failed to create database: {:?}", e),
-	};
-
-	let client = construct_file_client_skip_newline::<f32>("../UCRArchive2018/Ham/Ham_TEST", 1, ',', Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate).unwrap();
-	let buffer: Arc<Mutex<ClockBuffer<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(ClockBuffer::new(500,fm)));
-	let _sig1 = BufferedSignal::new(1, client, 400, buffer.clone(),|i,j| i >= j, |_| (), false);
-
-	let dist = Normal::new(0.0,1.0);
-	let std_norm_client = construct_gen_client::<f64,Normal,f64>(dist, Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate);
-
-	let (tx,rx) = channel();
-
-	let _handler = thread::spawn(move || {
-		tx.send(std_norm_client)
-	});
-
-	let _receiver = thread::spawn(move || {
-		let _val = rx.recv();
-		println!("got it");
-	});
-
-}

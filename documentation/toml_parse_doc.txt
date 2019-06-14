@@ -1,0 +1,137 @@
+# comments in toml
+
+# Necesssary and must be an integer
+segment_size = 1000 # write this line before any [_] are encountered
+					# This ensures that the segment size can be read
+					# This will determine how much memory is allocated 
+					# for each data collection of segments
+
+
+
+# Not-Necessary, but if one value is provided then the other 
+# must also be set as well
+[runtime]
+core_threads = 4 # Indicates the number of cores to use
+blocking_threads = 100 # Indicates the max number of "futures" 
+					   # that can be spawned on the constructed runtime
+
+
+# Currently Necessary, but the code exists to just change 
+# lib.rs enabling buffers without file_managers
+[file_handler]
+file_manager = "Rocks" # Necessary parameter used to indicate what fm to use
+	[file_handler.params] # Necessary, used to construct a 
+						  # toml table for parameters
+	path = "../rocksdb" # Necessary, used by Rocks to construct the database
+
+
+# Currently Necessary, but the code exists to just change 
+# lib.rs enabling file_managers without buffers, or 
+# signals just not storing values
+[buffer]
+buffer_size = 100 # Necessary, required to indicate how 
+				  # many buffer entires should be created
+type = "Clock" # Necessary, required to indicate what buffer should be used
+
+
+# At least one client must be created, otherwise nothing would happen
+[clients]
+
+	# An instance of a uniform gen client
+	[clients.client1]
+	id = 983937 # Not Necessary, the id value of the client, if not set
+				# then randomly generated
+
+	type = "gen" # declare that the client is of type "gen"
+
+	gen_type = "uniform" # the distribution to use
+
+	amount = 100 # Not Necessary, the number of values to recieve before
+				 # ending, if not set, then no limit on number of 
+				 # values recieved
+
+		[clients.client1.run_period] # Not Necessary, the max time a signal
+									 # should be alive, if not set, then 
+									 # no limit on how long the client 
+									 # should be alive
+		sec = 30 # The amount of secs to be alive
+		nano_sec = 34 # the amount of nano seconds to be alive
+
+		[clients.client1.frequency] # Not Necessary, the minimum time a 
+									# a client must wait before producing
+									# the next value, Also the start time,
+									# which determines how long the client
+									# client should wait before producing 
+									# the first value
+		sec = 30 # the amount of seconds to be wait before 
+				 # producing the next value
+		nano_sec = 34 # the amount of nano seconds to be wait before 
+					  # producing the next value
+		start_sec = 30 # the amount of seconds to wait before 
+					   # producing the first value
+		start_nano_sec = 34 # the amount of nano seconds to wait before 
+							# producing the first value
+		# note, you do not need to specify all of the values, only specify 
+		# the values you care about
+
+		# Necessary, the parameters used to construct the generator client
+		[clients.client1.params]
+		low = 50000.0 # Sets the minimum value
+		high = 2000000.0 # Sets the maximum value
+
+	# An instance of normal gen client that will run for a minute
+	# producing values with out limit and immediately and then end
+	[clients.client1]
+	id = 937
+	type = "gen"
+	gen_type = "normal"
+
+		[clients.client1.run_period]
+		sec = 60
+
+		[clients.client1.params]
+		mean = 0.0 # Sets the mean
+		std = 1.0 # Sets the standard deviation
+
+
+	# An instance of generator client that never ends
+	[clients.client2]
+	id = 3370
+	type = "gen"
+	gen_type = "normal"
+	# Must be set to true if you want to create a client like this
+	# This was done so that a client that never dies is only made
+	# intentionally. If the client has some termination condition
+	# like amount or run period then you do not need to set this value
+	never_die = true 
+
+
+		[clients.client2.params]
+		mean = 0.0 # Sets the mean
+		std = 1.0 # Sets the standard deviation
+
+
+	# An instance of file client that uses the UCRArchive files
+	[clients.client3]
+	type = "file" # used to indicate that it should be a file
+		[clients.client3.params]
+		path = "../UCRArchive2018/Trace/Trace_TEST" #path to file
+		reader_type = "NewlineAndSkip" # The type of file reader to use
+		delim = "," # The delimiter between each value
+		skip = 1 # How many values to initially skip
+
+	# An instance of file client that contains deseralized values
+	# delimited by something
+	[clients.client4]
+	type = "file"
+		[clients.client4.params]
+		path = "path"
+		reader_type = "DeserializeDelim"
+		delim = ","
+
+
+Final tips:
+
+1. Make sure that each client is uniquely named like client1, client2, etc. otherwise it will complain about overwiriting values. This is done so that clients aren't created, but accidentally overwrite previously created ones
+
+2. The fastest method for file reading should be creating a helper rust cargo that constructs a vector and then uses serialize to write that vector. Then create a function in this cargo to read a vector from a deserialized file. Then just pass this vector to client_from_iter in client.rs since it implements iterator and a client will be produced which can then be passed to a signal.

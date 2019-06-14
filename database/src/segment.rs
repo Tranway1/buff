@@ -1,4 +1,8 @@
 //use std::convert::TryFrom;
+use std::marker::PhantomData;
+use std::sync::Arc;
+use std::sync::Mutex;
+use crate::buffer_pool::SegmentBuffer;
 use std::time::SystemTime;
 use std::ops::Sub;
 use num::FromPrimitive;
@@ -126,6 +130,7 @@ impl<'a,T> Segment<T>
 	}
 }
 
+
 /*impl<'a,T,U> TryFrom<U> for Segment<T>
 	where T: Serialize + Deserialize<'a>,
 		  U: AsRef<[u8]>
@@ -170,6 +175,55 @@ impl<'a> SegmentKey {
 		}
 	}
 }
+
+
+/***************************************************************
+ ************************Segment Verifier***********************
+ ***************************************************************/
+
+
+pub struct SegmentIter<T> 
+	where T: Copy + Send
+{
+	buffer: Arc<Mutex<SegmentBuffer<T>>>,
+	cur_seg_key: SegmentKey,
+}
+
+impl<T> SegmentIter<T> 
+	where T: Copy + Send,
+{
+	pub fn new(s_id: SignalId, timestamp: SystemTime, buffer: Arc<Mutex<SegmentBuffer<T>>>) -> SegmentIter<T> {
+		SegmentIter {
+			buffer: buffer,
+			cur_seg_key: SegmentKey::new(timestamp, s_id),
+		}
+	}
+
+	pub fn get_last_n(s_id: SignalId, timestamp: SystemTime, buffer: Arc<Mutex<SegmentBuffer<T>>>, n: usize) -> Vec<Segment<T>> {
+		SegmentIter::new(s_id, timestamp, buffer).take(n).collect()
+	}
+}
+
+impl<T> Iterator for SegmentIter<T> 
+	where T: Copy + Send,
+{
+	type Item = Segment<T>;
+
+	fn next(&mut self) -> Option<Segment<T>> {
+		if let Ok(mut buf) = self.buffer.lock() {
+			if let Ok(Some(seg)) = buf.get(self.cur_seg_key) {
+				self.cur_seg_key = match seg.get_prev_key() {
+					Some(key) => key,
+					_ => return None,
+				};
+				return Some(seg.clone());
+			}
+		}
+
+		None
+	}
+}
+
 
 /***************************************************************
  ********************Fourier Implementation*********************

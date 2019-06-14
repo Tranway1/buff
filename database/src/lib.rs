@@ -5,6 +5,7 @@ extern crate bincode;
 extern crate futures;
 extern crate toml_loader;
 
+use rand::prelude::*;
 use rand::distributions::Uniform;
 use crate::client::construct_normal_gen_client;
 use crate::client::construct_gen_client;
@@ -26,6 +27,7 @@ use std::time::{Duration,Instant};
 use tokio::timer::Interval;
 use tokio::prelude::*;
 use tokio::runtime::{Builder,Runtime};
+use futures::sync::oneshot;
 use std::sync::{Arc,Mutex};
 use rand::distributions::{Normal};
 
@@ -116,7 +118,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 	
 	/* Construct the clients */
 	let mut signals: Vec<Box<(Future<Item=Option<SystemTime>,Error=()> + Send + Sync)>> = Vec::new();
-	let mut signal_id = 0;
+	let mut rng = thread_rng();
+	let mut signal_id = rng.gen();
 
 	for client_config in config.lookup("clients")
 							  .expect("At least one client must be provided")
@@ -124,6 +127,10 @@ pub fn run_test<T: 'static>(config_file: &str)
 							  .expect("The clients must be provided as a TOML table")
 							  .values()
 	{
+		if let Some(x) = client_config.lookup("id") {
+			signal_id = x.as_integer().expect("If an ID for a client is provided it must be supplied as an integer") as u64;
+		}
+
 		let client_type = client_config.lookup("type").expect("The client type must be provided");
 		
 		let amount = match client_config.lookup("amount") {
@@ -274,11 +281,11 @@ pub fn run_test<T: 'static>(config_file: &str)
 			}
 			x => panic!("The provided type, {:?}, is not currently supported", x),
 		}
-		signal_id += 1;
+		signal_id = rng.gen();
 	}
 
 	/* Construct the runtime */
-	let mut rt = match config.lookup("runtime") {
+	let rt = match config.lookup("runtime") {
 		None => Builder::new()
 					.after_start(|| println!("Threads have been constructed"))
 					.build()
@@ -304,11 +311,24 @@ pub fn run_test<T: 'static>(config_file: &str)
 		}
 	};
 
-	for res in rt.block_on(join_all(signals)).expect("The signals failed to join") {
-		match res {
-			None => println!("Failed to produce time stamp"),
-			Some(x) => println!("Return value: {:?}", x),
+	let executor = rt.executor();
+
+	let mut spawn_handles: Vec<oneshot::SpawnHandle<Option<SystemTime>,()>> = Vec::new();
+
+	for sig in signals {
+		spawn_handles.push(oneshot::spawn(sig, &executor))
+	}
+
+	for sh in spawn_handles {
+		match sh.wait() {
+			Ok(Some(x)) => println!("Produced a timestamp: {:?}", x),
+			_ => println!("Failed to produce a timestamp"),
 		}
+	}
+
+	match rt.shutdown_on_idle().wait() {
+		Ok(_) => (),
+		Err(_) => panic!("Failed to shutdown properly"),
 	}
 
 }
