@@ -3,7 +3,6 @@
  * learn its parameters
  */
 
-
 pub struct DeepLearningMethod {
 	params: u32,
 }

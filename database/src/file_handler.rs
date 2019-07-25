@@ -5,7 +5,7 @@ use serde::{Serialize,Deserialize};
 
 use rocksdb::{Options,DBVector};
 
-use segment::{Segment,random_f32signal};
+use segment::{Segment,random_f32signal,compare_vectors};
 use crate::segment;
 
 extern crate compression;
@@ -127,6 +127,7 @@ fn read_write_validate<'a,T:Send>(fm: &FileManager<Vec<u8>,DBVector>, seg: &Segm
 	}
 }
 
+
 #[test]
 fn read_write_test() {
 	let mut db_opts = Options::default();
@@ -150,7 +151,10 @@ fn read_write_test() {
         .unwrap();
 
 		match Segment::convert_from_bytes(&inflated_seg_bytes) {
-			Ok(x) => assert_eq!(seg, x),
+			Ok(x) => {
+				assert_eq!(seg, x);
+				assert!(compare_vectors(seg.get_data().as_slice(), x.get_data().as_slice()))
+			}
 			Err(e) => panic!("Failed to convert bytes to segment {:?}", e),
 		}
 	}

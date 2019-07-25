@@ -18,6 +18,7 @@ use rustfft::num_traits::Zero;
 use std::time::{Duration};
 use crate::future_signal::SignalId;
 use num::Num;
+use std::cmp::Ord;
 
 /* Currently plan to move methods into this file */
 use crate::methods;
@@ -109,6 +110,12 @@ impl<T> Segment<T> {
 
 	pub fn get_signal(&self) -> SignalId {
 		self.signal
+	}
+
+	pub fn get_data(&self) ->  &Vec<T>
+		where T: Clone
+	{
+		&self.data
 	}
 }
 
@@ -448,6 +455,19 @@ pub fn compare_vectors<T>(vec1: &[T], vec2: &[T]) -> bool
     return (sse / size) < err_margin;
 }
 
+
+pub fn error_rate<T>(actual: &[T], saved: &[T]) -> T
+	where T: Sub<T, Output = T> + Copy + Num + PartialOrd + FromPrimitive
+{
+	assert_eq!(actual.len(), saved.len());
+	let mut sse = T::zero();
+	for (&a, &b) in actual.iter().zip(saved.iter()) {
+		sse = sse +  (a - b) / a * FromPrimitive::from_f32(1.0).unwrap();
+	}
+	let size = FromPrimitive::from_usize(actual.len()).unwrap();
+	return (sse / size);
+}
+
 /* Main Segment Test Functions */
 #[test]
 fn test_fourier_compression() {
@@ -606,6 +626,9 @@ fn test_paa_compression() {
 								   -6.560113764372853, 1.268601472385028, 0.7403912311827868, 5.889601779604139, -2.2309543876483864, -0.8328576722688433, -1.839185921831108,
 									1.671295949634457, -2.1088144233142496, -3.818946823109443, -4.024574317266704, 4.0219760957569965, 1.0334445694967827, 1.2232317123314402,
 									2.3643965218816487, -0.9333663029003411, -2.306129794503646, 1.6342732625873495, 2.5051925502874544, -2.8836140169907583, 3.5870333411460043, 0.6485643837163005, -0.9747353637324933, 3.1311851847346737, -9.157191639192238]);
+	let error_rate = error_rate(&paa_seg3.data, &vec![-3.2146803177212875, -0.15185342178258382, -4.585896903804042, 2.6327921846859317, -1.2660067881155765, -2.952418330360052, 2.4719177593168036,
+													  -1.2701002334142735, 1.8721138558253496, -0.07421490250367953]);
+	assert_eq!(0.0, error_rate);
 }
 
 #[test]

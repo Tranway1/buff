@@ -38,6 +38,7 @@ mod segment;
 mod methods;
 mod future_signal;
 mod client;
+mod query;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
 

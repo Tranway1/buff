@@ -13,12 +13,13 @@ use std::time::{Duration,Instant};
 use std::mem;
 use tokio::prelude::*;
 use tokio::runtime::{Builder,Runtime};
+use crate::query::{Count, Max, Sum, Average};
 
 pub type SignalId = u64;
 
 pub struct BufferedSignal<T,U,F,G> 
 	where T: Copy + Send,
-	      U: Stream,
+	      U: Stream,	
 	      F: Fn(usize,usize) -> bool,
 	      G: Fn(&mut Segment<T>)
 {
@@ -506,10 +507,16 @@ fn run_dual_signals() {
 		Err(_)   => panic!("Failed to get inner Arc value"),
 	};
 
+
+	/* Add query test */
+	let count = Max::run(&buf);
+	println!("total count: {}", count);
+
 	let mut seg1: &Segment<f32> = match buf.get(seg_key1).unwrap() {
 		Some(seg) => seg,
 		None => panic!("Buffer lost track of the last value"),
 	};
+
 
 	let mut counter1 = 1;
 	while let Some(key) = seg1.get_prev_key() {
