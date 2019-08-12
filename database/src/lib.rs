@@ -4,6 +4,8 @@ extern crate bincode;
 #[macro_use]
 extern crate futures;
 extern crate toml_loader;
+#[macro_use]
+extern crate queues;
 
 use rand::prelude::*;
 use rand::distributions::Uniform;
@@ -39,6 +41,9 @@ mod methods;
 mod future_signal;
 mod client;
 mod query;
+mod tree;
+mod stats;
+mod btree;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
 
