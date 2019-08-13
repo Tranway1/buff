@@ -508,9 +508,6 @@ fn run_dual_signals() {
 	};
 
 
-	/* Add query test */
-	let count = Max::run(&buf);
-	println!("total count: {}", count);
 
 	let mut seg1: &Segment<f32> = match buf.get(seg_key1).unwrap() {
 		Some(seg) => seg,
@@ -550,3 +547,103 @@ fn run_dual_signals() {
 	}
 
 }
+
+
+
+
+
+#[test]
+fn run_single_signals() {
+    let mut db_opts = rocksdb::Options::default();
+    db_opts.create_if_missing(true);
+    let fm = match rocksdb::DB::open(&db_opts, "../rocksdb") {
+        Ok(x) => x,
+        Err(e) => panic!("Failed to create database: {:?}", e),
+    };
+
+    let buffer: Arc<Mutex<ClockBuffer<f32,rocksdb::DB>>>  = Arc::new(Mutex::new(ClockBuffer::new(50,fm)));
+    let client1 = match construct_file_client_skip_newline::<f32>(
+        "../UCRArchive2018/Ham/Ham_TEST", 1, ',',
+        Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate)
+        {
+            Ok(x) => x,
+            Err(_) => panic!("Failed to create client1"),
+        };
+    let client2 = match construct_file_client_skip_newline::<f32>(
+        "../UCRArchive2018/Fish/Fish_TEST", 1, ',',
+        Amount::Unlimited, RunPeriod::Indefinite, Frequency::Immediate)
+        {
+            Ok(x) => x,
+            Err(_) => panic!("Failed to create client2"),
+        };
+
+    let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false);
+    let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false);
+
+    let mut rt = match Builder::new().build() {
+        Ok(rt) => rt,
+        _ => panic!("Failed to build runtime"),
+    };
+
+    let (seg_key1,seg_key2) = match rt.block_on(sig1.join(sig2)) {
+        Ok((Some(time1),Some(time2))) => (SegmentKey::new(time1,1),SegmentKey::new(time2,2)),
+        _ => panic!("Failed to get the last system time for signal1 or signal2"),
+    };
+
+    match rt.shutdown_on_idle().wait() {
+        Ok(_) => (),
+        Err(_) => panic!("Failed to shutdown properly"),
+    }
+
+    let mut buf = match Arc::try_unwrap(buffer) {
+        Ok(lock) => match lock.into_inner() {
+            Ok(buf) => buf,
+            Err(_)  => panic!("Failed to get value in lock"),
+        },
+        Err(_)   => panic!("Failed to get inner Arc value"),
+    };
+
+
+    /* Add query test */
+    let count = Max::run(&buf);
+    println!("total count: {}", count);
+
+    let mut seg1: &Segment<f32> = match buf.get(seg_key1).unwrap() {
+        Some(seg) => seg,
+        None => panic!("Buffer lost track of the last value"),
+    };
+
+
+    let mut counter1 = 1;
+    while let Some(key) = seg1.get_prev_key() {
+        seg1 = match buf.get(key).unwrap() {
+            Some(seg) => seg,
+            None  => panic!(format!("Failed to get and remove segment from buffer, {}", counter1)),
+        };
+        counter1 += 1;
+    }
+
+    assert!(counter1 == 113 || counter1 == 135);
+
+    let mut seg2: &Segment<f32> = match buf.get(seg_key2).unwrap() {
+        Some(seg) => seg,
+        None => panic!("Buffer lost track of the last value"),
+    };
+
+    let mut counter2 = 1;
+    while let Some(key) = seg2.get_prev_key() {
+        seg2 = match buf.get(key).unwrap() {
+            Some(seg) => seg,
+            None  => panic!(format!("Failed to get and remove segment from buffer, {}", counter1)),
+        };
+        counter2 += 1;
+    }
+
+    match counter1 {
+        113 => assert!(counter2 == 135),
+        135 => assert!(counter2 == 113),
+        _   => panic!("Incorrect number of segments produced"),
+    }
+
+}
+
