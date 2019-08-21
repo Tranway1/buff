@@ -167,7 +167,6 @@ impl Average {
     pub fn run< T:  Num + Div + Copy + Send + Add<T, Output = T> + Signed + FromPrimitive>(signals: &SegmentBuffer<T>) -> T{
         let sum  = Sum::run(signals);
         let count = Count::run(signals);
-        let zero = T::one();
         (sum)/FromPrimitive::from_usize(count).unwrap()
     }
 }

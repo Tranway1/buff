@@ -20,6 +20,8 @@ use std::sync::Arc;
 use tokio::prelude::*;
 
 use crate::future_signal::BufferedSignal;
+use ndarray::{Array1, Array2};
+use std::borrow::Borrow;
 
 #[derive(PartialEq)]
 pub enum Amount {
@@ -295,4 +297,36 @@ pub fn construct_normal_gen_client<T>(mean: f64, std: f64,
 {
 	let producer = NormalDistItemGenerator::<T>::new(mean,std);
 	client_from_iter(producer, amount, run_period, frequency)
+}
+
+
+pub fn read_dict<T>(filename: &str, delim: char) -> Array2<T>
+	where T: FromStr{
+	//let filename = "src/main.rs";
+	// Open the file in read-only mode (ignoring errors).
+	let file = File::open(filename).unwrap();
+	let reader = BufReader::new(file);
+	let mut vec = Vec::new();
+	let mut llen:usize = 0;
+
+	// Read the file line by line using the lines() iterator from std::io::BufRead.
+	for (index, line) in reader.lines().enumerate() {
+		let line = line.unwrap(); // Ignore errors.
+		let mut elms = line.split(delim)
+			.filter_map(|item: &str| item.parse::<T>().ok())
+			.collect::<Vec<T>>();
+
+		llen = elms.len();
+		vec.append(&mut elms);
+		// Show the line and its number.
+		println!("{}. {}", index + 1, line);
+	}
+	let size = vec.len()/llen;
+	Array2::from_shape_vec((size,llen),vec).unwrap()
+}
+
+#[test]
+fn test_read_dict() {
+	let dic = read_dict::<f32>("../UCRArchive2018/kernel-test/dict.tsv".borrow(), ',');
+	println!("{:?}",dic.shape());
 }

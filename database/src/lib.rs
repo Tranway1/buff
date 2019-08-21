@@ -6,6 +6,9 @@ extern crate futures;
 extern crate toml_loader;
 #[macro_use]
 extern crate queues;
+#[macro_use]
+extern crate ndarray;
+//extern crate ndarray_linalg;
 
 use rand::prelude::*;
 use rand::distributions::Uniform;
@@ -44,6 +47,8 @@ mod query;
 mod tree;
 mod stats;
 mod btree;
+mod lcce;
+//mod kernel;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
 

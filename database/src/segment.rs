@@ -524,6 +524,7 @@ fn test_fourier_compression() {
 	let init_seg = Segment::new(None, SystemTime::now(),0,data, Some(vec![]), None);
 	let compressed_seg = init_seg.fourier_compress();
 	let decompressed_seg = compressed_seg.fourier_decompress();
+	println!("decompressed {:?}", decompressed_seg.data.as_slice());
 
 	assert!(compare_vectors(init_seg.data.as_slice(), decompressed_seg.data.as_slice()));
 	assert_eq!(compressed_seg.method, Some(Fourier));
