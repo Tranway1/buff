@@ -465,7 +465,7 @@ pub fn error_rate<T>(actual: &[T], saved: &[T]) -> T
 		sse = sse +  (a - b) / a * FromPrimitive::from_f32(1.0).unwrap();
 	}
 	let size = FromPrimitive::from_usize(actual.len()).unwrap();
-	return (sse / size);
+	return sse / size;
 }
 
 /* Main Segment Test Functions */

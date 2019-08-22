@@ -73,6 +73,15 @@ pub trait SegmentBuffer<T: Copy + Send> {
 
 	/* Will empty the buffer essentially clear */
 	fn flush(&mut self);
+
+	/* Returns true if the number of items in the buffer divided by 
+	 * the maximum number of items the buffer can hold exceeds
+	 * the provided threshold
+	 */
+	fn exceed_threshold(&self, threshold: f32) -> bool;
+
+	/* Remove the segment from the buffer and return it */
+	fn remove_segment(&mut self) -> Result<Segment<T>, BufErr>;
 }
 
 
@@ -89,6 +98,10 @@ pub enum BufErr {
 	GetFail,
 	GetMutFail,
 	EvictFailure,
+	BufEmpty,
+	UnderThresh,
+	RemoveFailure,
+	CantGrabMutex,
 }
 
 
@@ -177,6 +190,36 @@ impl<T,U> SegmentBuffer<T> for ClockBuffer<T,U>
 	fn flush(&mut self) {
 		self.buffer.clear();
 		self.clock.clear();
+	}
+
+	fn exceed_threshold(&self, threshold: f32) -> bool {
+		return (self.buffer.len() as f32 / self.buf_size as f32) > threshold;
+	}
+
+	fn remove_segment(&mut self) -> Result<Segment<T>,BufErr> {
+		let mut counter = 0;
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				let seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => return Err(BufErr::EvictFailure),
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
+
+				return Ok(seg);
+			} else {
+				self.clock[self.hand].1 = false;
+			} 
+
+			self.update_hand();
+			counter += 1;
+			if counter >= self.clock.len() { 
+				return Err(BufErr::BufEmpty); 
+			}
+		}
 	}
 }
 
@@ -346,6 +389,36 @@ impl<T> SegmentBuffer<T> for NoFmClockBuffer<T>
 	fn flush(&mut self) {
 		self.buffer.clear();
 		self.clock.clear();
+	}
+
+	fn exceed_threshold(&self, threshold: f32) -> bool {
+		return (self.buffer.len() as f32 / self.buf_size as f32) > threshold;
+	}
+
+	fn remove_segment(&mut self) -> Result<Segment<T>,BufErr> {
+		let mut counter = 0;
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				let seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => return Err(BufErr::EvictFailure),
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
+
+				return Ok(seg);
+			} else {
+				self.clock[self.hand].1 = false;
+			} 
+
+			self.update_hand();
+			counter += 1;
+			if counter >= self.clock.len() {
+				return Err(BufErr::BufEmpty);
+			}
+		}
 	}
 }
 

@@ -44,6 +44,7 @@ mod query;
 mod tree;
 mod stats;
 mod btree;
+mod compression_demon;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
 
