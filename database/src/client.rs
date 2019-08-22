@@ -319,7 +319,7 @@ pub fn read_dict<T>(filename: &str, delim: char) -> Array2<T>
 		llen = elms.len();
 		vec.append(&mut elms);
 		// Show the line and its number.
-		println!("{}. {}", index + 1, line);
+		//println!("{}. {}", index + 1, line);
 	}
 	let size = vec.len()/llen;
 	Array2::from_shape_vec((size,llen),vec).unwrap()

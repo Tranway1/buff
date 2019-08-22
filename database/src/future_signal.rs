@@ -14,8 +14,15 @@ use std::mem;
 use tokio::prelude::*;
 use tokio::runtime::{Builder,Runtime};
 use crate::query::{Count, Max, Sum, Average};
+use ndarray::Array2;
+use nalgebra::Matrix2;
+use crate::kernel::Kernel;
+use rustfft::FFTnum;
+use num::Float;
+use ndarray_linalg::Lapack;
 
 pub type SignalId = u64;
+const DEFAULT_BATCH_SIZE: usize = 20;
 
 pub struct BufferedSignal<T,U,F,G> 
 	where T: Copy + Send,
@@ -37,6 +44,7 @@ pub struct BufferedSignal<T,U,F,G>
 	compress_on_segmentation: bool,
 	compression_percentage: f64,
 	segments_produced: u32,
+	dict: Option<Array2<T>>,
 }
 
 /* Fix the buffer to not reuqire broad locking it */
@@ -50,7 +58,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 	pub fn new(signal_id: u64, signal: U, seg_size: usize, 
 		buffer: Arc<Mutex<SegmentBuffer<T> + Send + Sync>>,
 		split_decider: F, compress_func: G, 
-		compress_on_segmentation: bool) 
+		compress_on_segmentation: bool, dict: Option<Array2<T>>)
 		-> BufferedSignal<T,U,F,G> 
 	{
 		BufferedSignal {
@@ -68,6 +76,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 			compress_on_segmentation: compress_on_segmentation,
 			compression_percentage: 0.0,
 			segments_produced: 0,
+			dict: dict,
 		}
 	}
 
@@ -86,7 +95,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
    			having the signal neeed to exhaust the stream
  */
 impl<T,U,F,G> Future for BufferedSignal<T,U,F,G> 
-	where T: Copy + Send,
+	where T: Copy + Send+ FFTnum+ Float+Lapack,
 		  U: Stream<Item=T,Error=()>,
 		  F: Fn(usize,usize) -> bool,
 		  G: Fn(&mut Segment<T>)
@@ -95,6 +104,8 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<SystemTime>,()> {
+		let mut batch_vec = Vec::new();
+		let mut bsize = 0;
 		loop {
 			match self.signal.poll() {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
@@ -137,6 +148,21 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							None => None,
 						};
 
+						if bsize<DEFAULT_BATCH_SIZE{
+							batch_vec.extend(&data);
+							bsize= bsize+1;
+						}
+						else {
+							bsize = 0;
+							let belesize = batch_vec.len();
+							println!("vec for matrix length: {}", belesize);
+							let mut x = Array2::from_shape_vec((DEFAULT_BATCH_SIZE,self.seg_size),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
+							println!("matrix shape: {} * {}", x.rows(), x.cols());
+							let mut sparse_coding = Kernel::new(x,self.dict.clone().unwrap(),1,4);
+							sparse_coding.run();
+							println!("new vec for matrix length: {}", batch_vec.len());
+						}
+
 						let mut seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,
 											   data, Some(time_lapse), dur_offset);
 						
@@ -154,6 +180,7 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							},
 							Err(_)  => panic!("Failed to acquire buffer write lock"),
 						}; /* Currently panics if can't get it */
+
 					}
 
 					/* Always add the newly received data  */
@@ -481,8 +508,8 @@ fn run_dual_signals() {
 		Err(_) => panic!("Failed to create client2"),
 	};
 
-	let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false);
-	let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false);
+	let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false,None);
+	let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false,None);
 
 	let mut rt = match Builder::new().build() {
 		Ok(rt) => rt,
@@ -577,8 +604,8 @@ fn run_single_signals() {
             Err(_) => panic!("Failed to create client2"),
         };
 
-    let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false);
-    let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false);
+    let sig1 = BufferedSignal::new(1, client1, 400, buffer.clone(), |i,j| i >= j, |_| (), false, None);
+    let sig2 = BufferedSignal::new(2, client2, 600, buffer.clone(), |i,j| i >= j, |_| (), false,None);
 
     let mut rt = match Builder::new().build() {
         Ok(rt) => rt,

@@ -8,11 +8,11 @@ extern crate toml_loader;
 extern crate queues;
 #[macro_use]
 extern crate ndarray;
-//extern crate ndarray_linalg;
+extern crate ndarray_linalg;
 
 use rand::prelude::*;
 use rand::distributions::Uniform;
-use crate::client::construct_normal_gen_client;
+use crate::client::{construct_normal_gen_client, read_dict};
 use crate::client::construct_gen_client;
 use std::time::SystemTime;
 use crate::client::construct_file_client;
@@ -48,15 +48,19 @@ mod tree;
 mod stats;
 mod btree;
 mod lcce;
-//mod kernel;
+mod kernel;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
+use ndarray::Array2;
+use rustfft::FFTnum;
+use num::Float;
+use ndarray_linalg::Lapack;
 
 const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';
 
 pub fn run_test<T: 'static>(config_file: &str) 
-	where T: Copy + Send + Sync + Serialize + DeserializeOwned + Debug + FromStr + From<f32>,
+	where T: Copy + Send + Sync + Serialize + DeserializeOwned + Debug + FFTnum + Float + Lapack + FromStr + From<f32>,
 {
 
 	let config = match Loader::from_file(Path::new(config_file)) {
@@ -222,6 +226,16 @@ pub fn run_test<T: 'static>(config_file: &str)
 					None => DEFAULT_DELIM,
 				};
 
+				let dict = match params.lookup("dict") {
+					Some(value) => {
+						let dict_str = value.as_str().expect("The file dictionary file must be privded as a string");
+						let mut dic = read_dict::<T>(dict_str,delim);
+						println!("dictionary shape: {} * {}", dic.rows(), dic.cols());
+						Some(dic)
+					},
+					None => None,
+				};
+
 				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match reader_type {
 					"NewlineAndSkip" => {
 
@@ -236,8 +250,10 @@ pub fn run_test<T: 'static>(config_file: &str)
 					x => panic!("The specified file reader, {:?}, is not supported yet", x),
 				};
 
+
+
 				match &buf_option {
-					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false))),
+					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false,dict))),
 					None => panic!("Buffer and File manager provided not supported yet"),
 				}
 			}
@@ -286,7 +302,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 					x => panic!("The provided generator type, {:?}, is not currently supported", x),
 				};
 				match &buf_option {
-					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false))),
+					Some(buf) => signals.push(Box::new(BufferedSignal::new(signal_id, client, seg_size, *buf.clone(), |i,j| i >= j, |_| (), false, None))),
 					None => panic!("Buffer and File manager provided not supported yet"),
 				}
 			}

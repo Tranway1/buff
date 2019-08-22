@@ -48,7 +48,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         }
 
         for i in 0..nrows_x {
-            println!("{}",i);
+            //println!("{}",i);
             for j in 0..nrows_dic {
                 e[[i,j]] = SINKCompressed(self.x.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
                 dist_comp = dist_comp + 1;
@@ -56,7 +56,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         }
         let (val, vecs) = w.clone().eigh(UPLO::Upper).unwrap();
         println!("eigenvalues = \n{:?}", val);
-        println!("V = \n{:?}", vecs);
+        //println!("V = \n{:?}", vecs);
         let size_eig = val.len();
         let mut one_2d = Array2::ones((size_eig,1));
         let mut val_2d = Array2::from_shape_vec((size_eig,1), val.to_vec()).unwrap();
@@ -68,7 +68,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         z_exact = z_exact.dot(&va);
 
         let duration = start.elapsed();
-        println!("Time elapsed in kernel function() is: {:?}", duration);
+        //println!("Time elapsed in kernel function() is: {:?}", duration);
     }
 }
 
@@ -83,7 +83,7 @@ pub fn sumExpNCCcCompressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + 
     let mut sim = NCCcCompressed(xrow,dic_row,k) ;
     let exp_sim = sim.mapv(|e| (e * FromPrimitive::from_usize(gamma).unwrap()).exp());
     let sum = exp_sim.sum();
-    println!("sum:{:?}", sum);
+    //println!("sum:{:?}", sum);
     sum
 }
 
@@ -94,12 +94,12 @@ pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float
     let mut size = (fftlen.exp2()) as usize;
     //let compression = len * comp /100;
 
-    println!("xrow:{:?}",xrow);
+    //println!("xrow:{:?}",xrow);
     let mut xinput: Vec<Complex<T>> = xrow.iter()
         .map(|x| Complex::new(*x,Zero::zero()))
         .collect();
     xinput.resize(size,Complex::zero());
-    println!("xinput:{:?}",xinput);
+    //println!("xinput:{:?}",xinput);
     let mut xoutput: Vec<Complex<T>> = vec![Complex::zero(); size];
 
     let mut dic_input: Vec<Complex<T>> = dic_row.iter()
@@ -115,27 +115,27 @@ pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float
         fft.process(&mut dic_input, &mut dic_output);
     }
     let mut cpx = xoutput.clone();
-    println!("xoutput:{:?}",xoutput);
+    //println!("xoutput:{:?}",xoutput);
     leading_fft(&mut xoutput,comp);
     leading_fft(&mut dic_output,comp);
-    println!("xoutput:{:?}",xoutput);
+    //println!("xoutput:{:?}",xoutput);
     let mut mul: Vec<Complex<T>> = xoutput.iter().zip(dic_output).map(|(x,y)| x.mul(y.conj())).collect();
 //        let d:Vec<T> = mul.iter().map(|x| x.re).collect();
-    println!("mul:{:?}",mul);
+    //println!("mul:{:?}",mul);
 
     /* ifft*/
     let mut iplanner = FFTplanner::new(true);
     let ifft = iplanner.plan_fft(size);
-    println!("size:{:?}",size);
+    //println!("size:{:?}",size);
     let mut ioutput: Vec<Complex<T>> = vec![Complex::zero(); size];
-    let mut cpxoutput: Vec<Complex<T>> = vec![Complex::zero(); size];
+    //let mut cpxoutput: Vec<Complex<T>> = vec![Complex::zero(); size];
 
     ifft.process(&mut mul, &mut ioutput);
-    ifft.process(&mut cpx,&mut cpxoutput);
-    println!("cpxput:{:?}",cpxoutput);
-    println!("ioutput:{:?}",ioutput);
+    //ifft.process(&mut cpx,&mut cpxoutput);
+    //println!("cpxput:{:?}",cpxoutput);
+    //println!("ioutput:{:?}",ioutput);
     let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re).collect();
-    println!("reioutput:{:?}",reioutput);
+    //println!("reioutput:{:?}",reioutput);
 
     //
     let to_del = size-2*len+1;
@@ -144,13 +144,13 @@ pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float
     }
 
     let mut cc_sequence  = Array1::from_vec(reioutput);
-    println!("cc_sequence:{:?}",cc_sequence);
+    //println!("cc_sequence:{:?}",cc_sequence);
 
-    let norm = l2_norm(xrow.view()) * l2_norm(dic_row.view());
-    println!("norm:{:?}",norm);
+    let norm = l2_norm(xrow.view()) * l2_norm(dic_row.view()) * FromPrimitive::from_usize(size).unwrap();
+    //println!("norm:{:?}",norm);
 
     let res=cc_sequence.mapv_into(|e|e/norm);
-    println!("normlized:{:?}",res);
+    //println!("normlized:{:?}",res);
     res
 }
 

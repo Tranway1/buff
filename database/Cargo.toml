@@ -20,6 +20,6 @@ toml-loader = "0.1.1"
 queues = "1.1.0"
 nalgebra = "0.18.0"
 ndarray = "0.12.1"
-#ndarray-linalg = ""
+ndarray-linalg = ""
 #ndarray-linalg = { version = "0.11", features = ["netlib"] }
 #ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
