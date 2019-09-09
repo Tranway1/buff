@@ -15,43 +15,32 @@ use ndarray_linalg::eigh;
 use std::time::Instant;
 
 pub struct Kernel<T> {
-    x: Array2<T>,
     dictionary: Array2<T>,
     gamma: usize,
-    coeffs: usize
+    coeffs: usize,
+    eigen_vec: Array2<T>,
+    in_eigen_val: Array2<T>
 }
 
 impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapack+ Serialize> Kernel<T> {
-    pub fn new(x: Array2<T>, dictionary: Array2<T>, gamma: usize, coeffs: usize) -> Self {
+    pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize) -> Self {
         Kernel {
-            x: x,
             dictionary: dictionary,
             gamma: gamma,
-            coeffs: coeffs
+            coeffs: coeffs,
+            eigen_vec:  Array2::zeros((1, 1)),
+            in_eigen_val: Array2::zeros((1, 1))
         }
     }
 
-
-    pub fn run(&mut self){
-        let start = Instant::now();
-        let (nrows_x, ncols_x) = (self.x.rows(),self.x.cols());
+    pub fn dict_pre_process(&mut self){
         let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
         let mut w: Array2<T> = Array2::zeros((nrows_dic, nrows_dic));
-        let mut e: Array2<T> = Array2::zeros((nrows_x, nrows_dic));
         let mut dist_comp:usize= 0;
-
         for i in 0..nrows_dic {
             for j in 0..nrows_dic {
                 w[[i,j]] = SINKCompressed(self.dictionary.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
                 dist_comp = dist_comp+1;
-            }
-        }
-
-        for i in 0..nrows_x {
-            //println!("{}",i);
-            for j in 0..nrows_dic {
-                e[[i,j]] = SINKCompressed(self.x.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
-                dist_comp = dist_comp + 1;
             }
         }
         let (val, vecs) = w.clone().eigh(UPLO::Upper).unwrap();
@@ -64,8 +53,29 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         let sqrt_val = inv_val_2d.map(|x|Scalar::from_real(x.sqrt()));
         let mut dia = Array2::eye(size_eig);
         let mut va = dia.dot(&sqrt_val);
-        let mut z_exact = e.dot(&vecs);
-        z_exact = z_exact.dot(&va);
+        self.in_eigen_val = va;
+        self.eigen_vec = vecs;
+        println!("eigen vec shape:{}*{}", self.eigen_vec.rows(),self.eigen_vec.cols())
+    }
+
+
+    pub fn run(&mut self, x: Array2<T>){
+        let start = Instant::now();
+        let (nrows_x, ncols_x) = (x.rows(),x.cols());
+        let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
+        let mut e: Array2<T> = Array2::zeros((nrows_x, nrows_dic));
+        let mut dist_comp:usize= 0;
+
+        for i in 0..nrows_x {
+            //println!("{}",i);
+            for j in 0..nrows_dic {
+                e[[i,j]] = SINKCompressed(x.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
+                dist_comp = dist_comp + 1;
+            }
+        }
+
+        let mut z_exact = e.dot(&self.eigen_vec);
+        z_exact = z_exact.dot(&self.in_eigen_val);
 
         let duration = start.elapsed();
         //println!("Time elapsed in kernel function() is: {:?}", duration);
@@ -270,8 +280,8 @@ fn test_kernel(){
     let av = dic.dot(&vecs);
 
 
-    let mut lcce = Kernel::new(x,dic,3,4);
-    lcce.run();
+    let mut lcce = Kernel::new(dic,3,4);
+    lcce.run(x);
 
     //println!("AV = \n{:?}", av);
 

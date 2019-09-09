@@ -22,7 +22,7 @@ use num::Float;
 use ndarray_linalg::Lapack;
 
 pub type SignalId = u64;
-const DEFAULT_BATCH_SIZE: usize = 20;
+const DEFAULT_BATCH_SIZE: usize = 50;
 
 pub struct BufferedSignal<T,U,F,G> 
 	where T: Copy + Send,
@@ -44,12 +44,12 @@ pub struct BufferedSignal<T,U,F,G>
 	compress_on_segmentation: bool,
 	compression_percentage: f64,
 	segments_produced: u32,
-	dict: Option<Array2<T>>,
+	kernel: Kernel<T>
 }
 
 /* Fix the buffer to not reuqire broad locking it */
 impl<T,U,F,G> BufferedSignal<T,U,F,G> 
-	where T: Copy + Send,
+	where T: Copy + Send+ FFTnum + Float + Lapack,
 		  U: Stream,
 		  F: Fn(usize,usize) -> bool,
 		  G: Fn(&mut Segment<T>)
@@ -61,6 +61,9 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 		compress_on_segmentation: bool, dict: Option<Array2<T>>)
 		-> BufferedSignal<T,U,F,G> 
 	{
+		let mut kernel= Kernel::new(dict.clone().unwrap(),1,4);
+		kernel.dict_pre_process();
+
 		BufferedSignal {
 			start: None,
 			timestamp: None,
@@ -76,7 +79,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 			compress_on_segmentation: compress_on_segmentation,
 			compression_percentage: 0.0,
 			segments_produced: 0,
-			dict: dict,
+			kernel: kernel,
 		}
 	}
 
@@ -104,7 +107,7 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 	type Error = ();
 
 	fn poll(&mut self) -> Poll<Option<SystemTime>,()> {
-		let mut batch_vec = Vec::new();
+		let mut batch_vec: Vec<T> = Vec::new();
 		let mut bsize = 0;
 		loop {
 			match self.signal.poll() {
@@ -158,8 +161,7 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							println!("vec for matrix length: {}", belesize);
 							let mut x = Array2::from_shape_vec((DEFAULT_BATCH_SIZE,self.seg_size),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
 							println!("matrix shape: {} * {}", x.rows(), x.cols());
-							let mut sparse_coding = Kernel::new(x,self.dict.clone().unwrap(),1,4);
-							sparse_coding.run();
+							self.kernel.run(x);
 							println!("new vec for matrix length: {}", batch_vec.len());
 						}
 
