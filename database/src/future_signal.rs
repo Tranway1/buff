@@ -118,7 +118,8 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 						let percentage = self.compression_percentage / (self.segments_produced as f64);
 						println!("Signal: {}\n Segments produced: {}\n Compression percentage: {}\n Time: {:?}", self.signal_id, self.segments_produced, percentage, elapse);
 					} else {
-						println!("Signal: {}\n Segments produced: {}\n Time: {:?}", self.signal_id, self.segments_produced, elapse);
+						self.buffer.lock().unwrap().flush();
+						println!("Signal: {}\n Segments produced: {}\n Data points in total {} \n Time: {:?}\n Throughput: {:?} points/second", self.signal_id, (self.segments_produced as usize)/self.seg_size, self.segments_produced, elapse, (self.segments_produced as f64) / ((elapse.as_nanos() as f64) / (1_000_000_000 as f64)));
 					}
 					
 					return Ok(Async::Ready(self.prev_seg_offset))
@@ -152,8 +153,8 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 						};
 
 						if bsize<DEFAULT_BATCH_SIZE{
-							batch_vec.extend(&data);
-							bsize= bsize+1;
+							//batch_vec.extend(&data);
+							//bsize= bsize+1;
 						}
 						else {
 							bsize = 0;
@@ -277,7 +278,7 @@ impl<T,U,F,G> Future for NonStoredSignal<T,U,F,G>
 						let percentage = self.compression_percentage / (self.segments_produced as f64);
 						println!("Signal {} produced {} segments with a compression percentage of {}", self.signal_id, self.segments_produced, percentage);
 					} else {
-						println!("Signal {} produced {} segments", self.signal_id, self.segments_produced);
+						println!("Signal {} produced {} segments", self.signal_id, (self.segments_produced as usize)/self.seg_size);
 					}
 					
 					return Ok(Async::Ready(self.prev_seg_offset))
@@ -418,7 +419,7 @@ impl<T,U,F,G,V> Future for StoredSignal<T,U,F,G,V>
 						let percentage = self.compression_percentage / (self.segments_produced as f64);
 						println!("Signal {} produced {} segments with a compression percentage of {}", self.signal_id, self.segments_produced, percentage);
 					} else {
-						println!("Signal {} produced {} segments", self.signal_id, self.segments_produced);
+						println!("Signal {} produced {} segments", self.signal_id, (self.segments_produced as usize)/self.seg_size);
 					}
 					
 					return Ok(Async::Ready(self.prev_seg_offset))

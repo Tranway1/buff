@@ -408,9 +408,17 @@ pub fn paa_compress<T>(seg: &mut Segment<T>, chunk_size: usize)
 								x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
 						   })
 						   .collect();
-
+	println!("paa finished");
 	seg.data = paa_data	
 }
+
+/* Performs Fourier compression on the data carried by the segment */
+pub fn fourier_compress<'a,T>(seg: &mut Segment<T>)
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive+FFTnum+Deserialize<'a>+Serialize
+{
+	seg.fourier_compress();
+}
+
 
 /***************************************************************
  ****************************Testing****************************
@@ -465,7 +473,7 @@ pub fn error_rate<T>(actual: &[T], saved: &[T]) -> T
 		sse = sse +  (a - b) / a * FromPrimitive::from_f32(1.0).unwrap();
 	}
 	let size = FromPrimitive::from_usize(actual.len()).unwrap();
-	return (sse / size);
+	return sse / size;
 }
 
 /* Main Segment Test Functions */

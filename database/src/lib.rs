@@ -16,8 +16,8 @@ use crate::client::{construct_normal_gen_client, read_dict};
 use crate::client::construct_gen_client;
 use std::time::SystemTime;
 use crate::client::construct_file_client;
-use crate::segment::Segment;
-use rocksdb::DBVector;
+use crate::segment::{Segment, paa_compress,fourier_compress};
+use rocksdb::{DBVector, DB};
 use crate::file_handler::FileManager;
 use futures::future::join_all;
 use std::str::FromStr;
@@ -49,12 +49,15 @@ mod stats;
 mod btree;
 mod lcce;
 mod kernel;
+mod compression_demon;
 
 use client::{construct_file_client_skip_newline,Amount,RunPeriod,Frequency};
 use ndarray::Array2;
 use rustfft::FFTnum;
 use num::Float;
 use ndarray_linalg::Lapack;
+use crate::compression_demon::CompressionDemon;
+use std::thread;
 
 const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';
@@ -98,6 +101,30 @@ pub fn run_test<T: 'static>(config_file: &str)
 	};
 
 
+	/* Construct the file manager for compression to be used */
+	let fm_comp = match config.lookup("file_handler") {
+		Some (config) => {
+			let fm_type = config.lookup("file_manager").expect("A file manager must be provided");
+			match fm_type.as_str().expect("A file manager must be provided as a string") {
+				"Rocks" => {
+					let params = config.lookup("params").expect("A RocksDB file manager requires parameters");
+					let path = params.lookup("path").expect("RocksDB requires a path be provided").as_str().expect("Rocks file path must be provided as string");
+					let mut comp_path = String::from(path);
+					comp_path.push_str("comp");
+					let new_path = comp_path.as_str();
+					let mut db_opts = rocksdb::Options::default();
+					db_opts.create_if_missing(true);
+					match rocksdb::DB::open(&db_opts, new_path) {
+						Ok(x) => Some(Box::new(x)),
+						Err(e) => panic!("Failed to create RocksFM object: {:?}", e),
+					}
+				}
+				x => panic!("File manager type, {:?}, not supported yet", x),
+			}
+		}
+		None => None,
+	};
+
 	/* Construct the buffer to be used */
 	let buffer_size = match config.lookup("buffer") {
 		Some(value) => value.lookup("buffer_size").map_or(DEFAULT_BUF_SIZE, |v| v.as_integer().expect("The buffer size should be provided as an integer") as usize),
@@ -130,6 +157,34 @@ pub fn run_test<T: 'static>(config_file: &str)
 			}
 		}
 	};
+
+    /* Create buffer for compression segments*/
+    let compre_buf_option: Option<Box<Arc<Mutex<(SegmentBuffer<T> + Send + Sync)>>>> = match fm_comp {
+        Some(fm) => {
+            match config.lookup("buffer") {
+                Some(config) => {
+                    let buf_type = config.lookup("type").expect("A buffer type must be provided");
+                    match buf_type.as_str().expect("Buffer type must be provided as string") {
+                        "Clock" => Some(Box::new(Arc::new(Mutex::new(ClockBuffer::<T,rocksdb::DB>::new(buffer_size,*fm))))),
+                        x => panic!("The buffer type, {:?}, is not currently supported to run with a file manager", x),
+                    }
+                }
+                None => None,
+            }
+        }
+        None => {
+            match config.lookup("buffer") {
+                Some(config) => {
+                    let buf_type = config.lookup("type").expect("A buffer type must be provided");
+                    match buf_type.as_str().expect("Buffer type must be provided as a string") {
+                        "NoFmClock" => Some(Box::new(Arc::new(Mutex::new(NoFmClockBuffer::<T>::new(buffer_size))))),
+                        x => panic!("The buffer type, {:?}, is not currently supported to run without a file manager", x),
+                    }
+                }
+                None => None,
+            }
+        }
+    };
 	
 	/* Construct the clients */
 	let mut signals: Vec<Box<(Future<Item=Option<SystemTime>,Error=()> + Send + Sync)>> = Vec::new();
@@ -311,6 +366,9 @@ pub fn run_test<T: 'static>(config_file: &str)
 		signal_id = rng.gen();
 	}
 
+    //let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(fourier_compress(x)));
+
 	/* Construct the runtime */
 	let rt = match config.lookup("runtime") {
 		None => Builder::new()
@@ -346,12 +404,21 @@ pub fn run_test<T: 'static>(config_file: &str)
 		spawn_handles.push(oneshot::spawn(sig, &executor))
 	}
 
+	let handle = thread::spawn(move || {
+		println!("Run compression demon" );
+		compress_demon.run();
+		println!("segment commpressed: {}", compress_demon.get_processed() );
+	});
+
+
 	for sh in spawn_handles {
 		match sh.wait() {
 			Ok(Some(x)) => println!("Produced a timestamp: {:?}", x),
 			_ => println!("Failed to produce a timestamp"),
 		}
 	}
+
+	handle.join().unwrap();
 
 	match rt.shutdown_on_idle().wait() {
 		Ok(_) => (),

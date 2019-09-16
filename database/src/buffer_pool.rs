@@ -73,6 +73,19 @@ pub trait SegmentBuffer<T: Copy + Send> {
 
 	/* Will empty the buffer essentially clear */
 	fn flush(&mut self);
+
+	/* Returns true if the number of items in the buffer divided by 
+	 * the maximum number of items the buffer can hold exceeds
+	 * the provided threshold
+	 */
+	fn exceed_threshold(&self, threshold: f32) -> bool;
+
+	/* Remove the segment from the buffer and return it */
+	fn remove_segment(&mut self) -> Result<Segment<T>, BufErr>;
+
+
+	/* Signal done*/
+	fn is_done(&self)->bool;
 }
 
 
@@ -89,6 +102,10 @@ pub enum BufErr {
 	GetFail,
 	GetMutFail,
 	EvictFailure,
+	BufEmpty,
+	UnderThresh,
+	RemoveFailure,
+	CantGrabMutex,
 }
 
 
@@ -103,11 +120,13 @@ pub struct ClockBuffer<T,U>
 		  U: FileManager<Vec<u8>,DBVector> + Sync + Send,
 {
 	hand: usize,
+	tail: usize,
 	buffer: HashMap<SegmentKey,Segment<T>>,
 	clock: Vec<(SegmentKey,bool)>,
 	clock_map: HashMap<SegmentKey,usize>,
 	file_manager: U,
 	buf_size: usize,
+	done: bool,
 }
 
 
@@ -136,6 +155,11 @@ impl<T,U> SegmentBuffer<T> for ClockBuffer<T,U>
 		} else {
 			Ok(None)
 		}
+	}
+
+
+	fn is_done(&self)->bool{
+		self.done
 	}
 
 	#[inline]
@@ -177,6 +201,43 @@ impl<T,U> SegmentBuffer<T> for ClockBuffer<T,U>
 	fn flush(&mut self) {
 		self.buffer.clear();
 		self.clock.clear();
+		self.done = true;
+	}
+
+
+	fn exceed_threshold(&self, threshold: f32) -> bool {
+		//println!("{}full, threshold:{}",(self.buffer.len() as f32 / self.buf_size as f32), threshold);
+		return (self.buffer.len() as f32 / self.buf_size as f32) >= threshold;
+	}
+
+	fn remove_segment(&mut self) -> Result<Segment<T>,BufErr> {
+		let mut counter = 0;
+		loop {
+			if let (seg_key,false) = self.clock[self.tail] {
+				let seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => {
+						//println!("Failed to get segment from buffer.");
+						self.update_tail();
+						return Err(BufErr::EvictFailure)
+					},
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
+				//println!("fetch a segment from buffer.");
+				return Ok(seg);
+			} else {
+				self.clock[self.tail].1 = false;
+			} 
+
+			self.update_tail();
+			counter += 1;
+			if counter > self.clock.len() {
+				return Err(BufErr::BufEmpty); 
+			}
+		}
 	}
 }
 
@@ -188,11 +249,13 @@ impl<T,U> ClockBuffer<T,U>
 	pub fn new(buf_size: usize, file_manager: U) -> ClockBuffer<T,U> {
 		ClockBuffer {
 			hand: 0,
+			tail: 0,
 			buffer: HashMap::with_capacity(buf_size),
 			clock: Vec::with_capacity(buf_size),
 			clock_map: HashMap::with_capacity(buf_size),
 			file_manager: file_manager,
 			buf_size: buf_size,
+			done: false,
 		}
 	}
 
@@ -206,6 +269,11 @@ impl<T,U> ClockBuffer<T,U>
 	#[inline]
 	fn update_hand(&mut self) {
 		self.hand = (self.hand + 1) % self.buf_size;
+	}
+
+	#[inline]
+	fn update_tail(&mut self) {
+		self.tail = (self.tail + 1) % self.clock.len();
 	}
 
 	fn put_with_key(&mut self, key: SegmentKey, seg: Segment<T>) -> Result<(), BufErr> {
@@ -285,7 +353,10 @@ impl<T,U> ClockBuffer<T,U>
 				};
 
 				match self.file_manager.fm_write(seg_key_bytes,seg_bytes) {
-					Ok(()) => return Ok(self.hand),
+					Ok(()) => {
+						self.tail = self.hand + 1;
+						return Ok(self.hand)
+					}
 					Err(_) => return Err(BufErr::FileManagerErr),
 				}
 
@@ -304,10 +375,12 @@ pub struct NoFmClockBuffer<T>
 	where T: Copy + Send,
 {
 	hand: usize,
+	tail: usize,
 	buffer: HashMap<SegmentKey,Segment<T>>,
 	clock: Vec<(SegmentKey,bool)>,
 	clock_map: HashMap<SegmentKey,usize>,
 	buf_size: usize,
+	done: bool,
 }
 
 
@@ -321,6 +394,10 @@ impl<T> SegmentBuffer<T> for NoFmClockBuffer<T>
 
 	fn get_mut(&mut self, _key: SegmentKey) -> Result<Option<&Segment<T>>,BufErr> {
 		unimplemented!()
+	}
+
+	fn is_done(&self)->bool{
+		self.done
 	}
 
 	#[inline]
@@ -346,6 +423,37 @@ impl<T> SegmentBuffer<T> for NoFmClockBuffer<T>
 	fn flush(&mut self) {
 		self.buffer.clear();
 		self.clock.clear();
+		self.done = true;
+	}
+
+	fn exceed_threshold(&self, threshold: f32) -> bool {
+		return (self.buffer.len() as f32 / self.buf_size as f32) > threshold;
+	}
+
+	fn remove_segment(&mut self) -> Result<Segment<T>,BufErr> {
+		let mut counter = 0;
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				let seg = match self.buffer.remove(&seg_key) {
+					Some(seg) => seg,
+					None => return Err(BufErr::EvictFailure),
+				};
+				match self.clock_map.remove(&seg_key) {
+					None => panic!("Non-unique key panic as clock map and buffer are desynced somehow"),
+					_ => (),
+				}
+
+				return Ok(seg);
+			} else {
+				self.clock[self.hand].1 = false;
+			} 
+
+			self.update_hand();
+			counter += 1;
+			if counter >= self.clock.len() {
+				return Err(BufErr::BufEmpty);
+			}
+		}
 	}
 }
 
@@ -356,10 +464,12 @@ impl<T> NoFmClockBuffer<T>
 	pub fn new(buf_size: usize) -> NoFmClockBuffer<T> {
 		NoFmClockBuffer {
 			hand: 0,
+			tail: 0,
 			buffer: HashMap::with_capacity(buf_size),
 			clock: Vec::with_capacity(buf_size),
 			clock_map: HashMap::with_capacity(buf_size),
 			buf_size: buf_size,
+			done:false,
 		}
 	}
 
