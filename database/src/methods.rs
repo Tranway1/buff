@@ -1,5 +1,5 @@
-mod kernel;
-mod deep_learning;
+pub mod compress;
+pub mod deep_learning;
 
 use std::fmt;
 use crate::dictionary::{DictionaryId};

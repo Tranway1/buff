@@ -1,5 +1,6 @@
 use core::fmt;
 use std::cmp::max;
+use std::mem;
 use ndarray;
 use ndarray::{ArrayD, ArrayViewMut1, ArrayView1, Array1, LinalgScalar};
 use ndarray::Array2;
@@ -13,23 +14,28 @@ use std::borrow::BorrowMut;
 use ndarray_linalg::*;
 use ndarray_linalg::eigh;
 use std::time::Instant;
+use crate::segment::Segment;
+use crate::methods::compress::CompressionMethod;
 
+#[derive(Clone)]
 pub struct Kernel<T> {
     dictionary: Array2<T>,
     gamma: usize,
     coeffs: usize,
     eigen_vec: Array2<T>,
-    in_eigen_val: Array2<T>
+    in_eigen_val: Array2<T>,
+    batchsize: usize
 }
 
 impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapack+ Serialize> Kernel<T> {
-    pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize) -> Self {
+    pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize, batchsize: usize) -> Self {
         Kernel {
             dictionary: dictionary,
             gamma: gamma,
             coeffs: coeffs,
             eigen_vec:  Array2::zeros((1, 1)),
-            in_eigen_val: Array2::zeros((1, 1))
+            in_eigen_val: Array2::zeros((1, 1)),
+            batchsize: batchsize
         }
     }
 
@@ -59,7 +65,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
     }
 
 
-    pub fn run(&mut self, x: Array2<T>){
+    pub fn run(&self, x: Array2<T>){
         let start = Instant::now();
         let (nrows_x, ncols_x) = (x.rows(),x.cols());
         let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
@@ -79,6 +85,35 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
 
         let duration = start.elapsed();
         //println!("Time elapsed in kernel function() is: {:?}", duration);
+    }
+}
+
+
+impl<T> CompressionMethod<T> for Kernel<T>
+    where T:FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapack+ Serialize{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, mut segs: Vec<Segment<T>>) {
+        let mut batch_vec: Vec<T> = Vec::new();
+        for seg in &mut segs {
+            batch_vec.extend(seg.get_data().clone());
+
+        }
+        let belesize = batch_vec.len();
+        println!("vec for matrix length: {}", belesize);
+        let mut x = Array2::from_shape_vec((self.batchsize,belesize/self.batchsize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
+        println!("matrix shape: {} * {}", x.rows(), x.cols());
+        self.run(x);
+    }
+
+    fn run_decompress(&self, segs: Vec<Segment<T>>) {
+        unimplemented!()
     }
 }
 
@@ -280,7 +315,7 @@ fn test_kernel(){
     let av = dic.dot(&vecs);
 
 
-    let mut lcce = Kernel::new(dic,3,4);
+    let mut lcce = Kernel::new(dic,3,4,20);
     lcce.run(x);
 
     //println!("AV = \n{:?}", av);

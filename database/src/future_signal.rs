@@ -61,7 +61,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 		compress_on_segmentation: bool, dict: Option<Array2<T>>)
 		-> BufferedSignal<T,U,F,G> 
 	{
-		let mut kernel= Kernel::new(dict.clone().unwrap(),1,4);
+		let mut kernel= Kernel::new(dict.clone().unwrap(),1,4,DEFAULT_BATCH_SIZE);
 		kernel.dict_pre_process();
 
 		BufferedSignal {

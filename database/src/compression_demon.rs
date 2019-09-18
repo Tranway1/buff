@@ -42,7 +42,6 @@ impl<T,U,F> CompressionDemon<T,U,F>
 			uncomp_threshold: uncomp_threshold,
 			processed: 0,
 			compress_func: compress_func,
-
 		}
 	}
 
@@ -119,9 +118,6 @@ impl<T,U,F> CompressionDemon<T,U,F>
 					continue
 				},
 			}
-//			else if self.is_done_buf() {
-//				break
-//			}
 		}
 	}
 

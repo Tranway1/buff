@@ -40,7 +40,7 @@ mod buffer_pool;
 mod dictionary;
 mod file_handler;
 mod segment;
-mod methods;
+pub mod methods;
 mod future_signal;
 mod client;
 mod query;
@@ -62,7 +62,7 @@ use std::thread;
 const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';
 
-pub fn run_test<T: 'static>(config_file: &str) 
+pub fn run_test<T: 'static>(config_file: &str)
 	where T: Copy + Send + Sync + Serialize + DeserializeOwned + Debug + FFTnum + Float + Lapack + FromStr + From<f32>,
 {
 
@@ -185,7 +185,7 @@ pub fn run_test<T: 'static>(config_file: &str)
             }
         }
     };
-	
+
 	/* Construct the clients */
 	let mut signals: Vec<Box<(Future<Item=Option<SystemTime>,Error=()> + Send + Sync)>> = Vec::new();
 	let mut rng = thread_rng();
@@ -202,7 +202,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 		}
 
 		let client_type = client_config.lookup("type").expect("The client type must be provided");
-		
+
 		let amount = match client_config.lookup("amount") {
 			Some(value) => Amount::Limited (value.as_integer().expect("The client amount argument must be specified as an integer") as u64),
 			None => Amount::Unlimited,
@@ -212,15 +212,15 @@ pub fn run_test<T: 'static>(config_file: &str)
 			Some(table) => {
 				let secs = match table.lookup("sec") {
 					Some(sec_value) => sec_value.as_integer().expect("The sec argument in run period must be provided as an integer") as u64,
-					None => 0, 
+					None => 0,
 				};
 				let nano_secs = match table.lookup("nano_sec") {
 					Some(nano_sec_value) => nano_sec_value.as_integer().expect("The nano_sec argument in run period must be provided as an integer") as u32,
-					None => 0, 
+					None => 0,
 				};
 
 				if secs == 0 && nano_secs == 0 {
-					panic!("The run period was provided a value of 0 for both secs and nano_secs. This is not allowed as the signal will start and immediately exit"); 
+					panic!("The run period was provided a value of 0 for both secs and nano_secs. This is not allowed as the signal will start and immediately exit");
 				}
 
 				RunPeriod::Finite(Duration::new(secs,nano_secs))
@@ -232,26 +232,26 @@ pub fn run_test<T: 'static>(config_file: &str)
 			Some(table) => {
 				let secs = match table.lookup("sec") {
 					Some(sec_value) => sec_value.as_integer().expect("The sec argument in run period must be provided as an integer") as u64,
-					None => 0, 
+					None => 0,
 				};
 				let nano_secs = match table.lookup("nano_sec") {
 					Some(nano_sec_value) => nano_sec_value.as_integer().expect("The nano_sec argument in run period must be provided as an integer") as u32,
-					None => 0, 
+					None => 0,
 				};
 
 				if secs == 0 && nano_secs == 0 {
-					panic!("The interval period was provided with a value of 0 for both secs and nano_secs. This is not allowed as the signal will have no delay"); 
+					panic!("The interval period was provided with a value of 0 for both secs and nano_secs. This is not allowed as the signal will have no delay");
 				}
 
 				let interval = Duration::new(secs,nano_secs);
 
 				let start_secs = match table.lookup("start_sec") {
 					Some(sec_value) => sec_value.as_integer().expect("The start sec argument in run period must be provided as an integer") as u64,
-					None => 0, 
+					None => 0,
 				};
 				let start_nano_secs = match table.lookup("start_nano_sec") {
 					Some(nano_sec_value) => nano_sec_value.as_integer().expect("The start nano_sec argument in run period must be provided as an integer") as u32,
-					None => 0, 
+					None => 0,
 				};
 
 				let start = Instant::now() + Duration::new(start_secs,start_nano_secs);
@@ -267,7 +267,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 										 .expect("A file client must provide a reader types in the params table")
 										 .as_str()
 										 .expect("The reader type must be provided as a string");
-				
+
 				let path = params
 							.lookup("path")
 							.expect("The file client parameters must provide a file path argument")
@@ -324,7 +324,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
 								   .expect("The gen client must be provided a gen type field")
 								   .as_str()
-								   .expect("The gen type must be provided as a string") 
+								   .expect("The gen type must be provided as a string")
 				{
 					"normal" => {
 						let std = params.lookup("std")
@@ -366,8 +366,18 @@ pub fn run_test<T: 'static>(config_file: &str)
 		signal_id = rng.gen();
 	}
 
+	let buf = buf_option.clone();
+	let comp_buf = compre_buf_option.clone();
+	let buf1 = buf_option.clone();
+	let comp_buf1 = compre_buf_option.clone();
+	let buf2 = buf_option.clone();
+	let comp_buf2 = compre_buf_option.clone();
+
+
     //let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
-	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(fourier_compress(x)));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
+	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
+	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
 
 	/* Construct the runtime */
 	let rt = match config.lookup("runtime") {
@@ -410,6 +420,17 @@ pub fn run_test<T: 'static>(config_file: &str)
 		println!("segment commpressed: {}", compress_demon.get_processed() );
 	});
 
+	let handle1 = thread::spawn(move || {
+		println!("Run compression demon 1" );
+		compress_demon1.run();
+		println!("segment commpressed: {}", compress_demon1.get_processed() );
+	});
+
+	let handle2 = thread::spawn(move || {
+		println!("Run compression demon 2" );
+		compress_demon2.run();
+		println!("segment commpressed: {}", compress_demon2.get_processed() );
+	});
 
 	for sh in spawn_handles {
 		match sh.wait() {
@@ -419,6 +440,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 	}
 
 	handle.join().unwrap();
+	handle1.join().unwrap();
+	handle2.join().unwrap();
 
 	match rt.shutdown_on_idle().wait() {
 		Ok(_) => (),

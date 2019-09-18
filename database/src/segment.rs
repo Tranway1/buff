@@ -29,6 +29,7 @@ extern crate rand;
 use rand::{SeedableRng};
 use rand::rngs::{StdRng};
 use rand::distributions::{Normal, Distribution};
+use crate::methods::compress::CompressionMethod;
 
 
 /* 
@@ -412,6 +413,39 @@ pub fn paa_compress<T>(seg: &mut Segment<T>, chunk_size: usize)
 	seg.data = paa_data	
 }
 
+#[derive(Clone)]
+pub struct PAACompress {
+	chunksize: usize,
+	batchsize: usize
+}
+
+impl PAACompress {
+	pub fn new(chunksize: usize, batchsize: usize) -> Self {
+		PAACompress { chunksize, batchsize }
+	}
+}
+
+impl<T> CompressionMethod<T> for PAACompress
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive{
+	fn get_segments(&self) {
+		unimplemented!()
+	}
+
+	fn get_batch(&self) -> usize {
+		self.batchsize
+	}
+
+	fn run_compress(&self, mut segs: Vec<Segment<T>>) {
+		for seg in &mut segs {
+			paa_compress(seg,self.chunksize);
+		}
+	}
+
+	fn run_decompress(&self, mut segs: Vec<Segment<T>>) {
+		unimplemented!()
+	}
+}
+
 /* Performs Fourier compression on the data carried by the segment */
 pub fn fourier_compress<'a,T>(seg: &mut Segment<T>)
 	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive+FFTnum+Deserialize<'a>+Serialize
@@ -420,6 +454,38 @@ pub fn fourier_compress<'a,T>(seg: &mut Segment<T>)
 }
 
 
+#[derive(Clone)]
+pub struct FourierCompress {
+	chunksize: usize,
+	batchsize: usize
+}
+
+impl FourierCompress {
+	pub fn new(chunksize: usize, batchsize: usize) -> Self {
+		FourierCompress { chunksize, batchsize }
+	}
+}
+
+impl<'a,T> CompressionMethod<T> for FourierCompress
+	where T: Num + Div + Copy + Add<T, Output = T> + FromPrimitive+FFTnum+Deserialize<'a>+Serialize {
+	fn get_segments(&self) {
+		unimplemented!()
+	}
+
+	fn get_batch(&self) -> usize {
+		self.batchsize
+	}
+
+	fn run_compress(&self, mut segs: Vec<Segment<T>>) {
+		for seg in &mut segs {
+			fourier_compress(seg);
+		}
+	}
+
+	fn run_decompress(&self, mut segs: Vec<Segment<T>>) {
+		unimplemented!()
+	}
+}
 /***************************************************************
  ****************************Testing****************************
  ***************************************************************/
