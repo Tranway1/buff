@@ -435,13 +435,13 @@ impl<T> CompressionMethod<T> for PAACompress
 		self.batchsize
 	}
 
-	fn run_compress(&self, mut segs: Vec<Segment<T>>) {
-		for seg in &mut segs {
+	fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+		for seg in segs {
 			paa_compress(seg,self.chunksize);
 		}
 	}
 
-	fn run_decompress(&self, mut segs: Vec<Segment<T>>) {
+	fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
 		unimplemented!()
 	}
 }
@@ -476,13 +476,13 @@ impl<'a,T> CompressionMethod<T> for FourierCompress
 		self.batchsize
 	}
 
-	fn run_compress(&self, mut segs: Vec<Segment<T>>) {
-		for seg in &mut segs {
+	fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+		for seg in segs {
 			fourier_compress(seg);
 		}
 	}
 
-	fn run_decompress(&self, mut segs: Vec<Segment<T>>) {
+	fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
 		unimplemented!()
 	}
 }

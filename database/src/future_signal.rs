@@ -153,8 +153,8 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 						};
 
 						if bsize<DEFAULT_BATCH_SIZE{
-							//batch_vec.extend(&data);
-							//bsize= bsize+1;
+							batch_vec.extend(&data);
+							bsize= bsize+1;
 						}
 						else {
 							bsize = 0;

@@ -80,6 +80,11 @@ pub trait SegmentBuffer<T: Copy + Send> {
 	 */
 	fn exceed_threshold(&self, threshold: f32) -> bool;
 
+	/* Returns true if the number of items in the buffer exceeds
+	 * the provided batchsize
+	 */
+	fn exceed_batch(&self, batchsize: usize) -> bool;
+
 	/* Remove the segment from the buffer and return it */
 	fn remove_segment(&mut self) -> Result<Segment<T>, BufErr>;
 
@@ -98,6 +103,7 @@ pub enum BufErr {
 	FailedSegKeySer,
 	FailedSegSer,
 	FileManagerErr,
+	FailPut,
 	ByteConvertFail,
 	GetFail,
 	GetMutFail,
@@ -238,6 +244,10 @@ impl<T,U> SegmentBuffer<T> for ClockBuffer<T,U>
 				return Err(BufErr::BufEmpty); 
 			}
 		}
+	}
+
+	fn exceed_batch(&self, batchsize: usize) -> bool {
+		return self.buffer.len() >= batchsize;
 	}
 }
 
@@ -454,6 +464,10 @@ impl<T> SegmentBuffer<T> for NoFmClockBuffer<T>
 				return Err(BufErr::BufEmpty);
 			}
 		}
+	}
+
+	fn exceed_batch(&self, batchsize: usize) -> bool {
+		return self.buffer.len() >= batchsize;
 	}
 }
 

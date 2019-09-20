@@ -16,7 +16,7 @@ use crate::client::{construct_normal_gen_client, read_dict};
 use crate::client::construct_gen_client;
 use std::time::SystemTime;
 use crate::client::construct_file_client;
-use crate::segment::{Segment, paa_compress,fourier_compress};
+use crate::segment::{Segment, paa_compress, fourier_compress, FourierCompress, PAACompress};
 use rocksdb::{DBVector, DB};
 use crate::file_handler::FileManager;
 use futures::future::join_all;
@@ -58,6 +58,7 @@ use num::Float;
 use ndarray_linalg::Lapack;
 use crate::compression_demon::CompressionDemon;
 use std::thread;
+use crate::kernel::Kernel;
 
 const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';
@@ -191,6 +192,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 	let mut rng = thread_rng();
 	let mut signal_id = rng.gen();
 
+	let mut testdict = None;
+
 	for client_config in config.lookup("clients")
 							  .expect("At least one client must be provided")
 							  .as_table()
@@ -291,6 +294,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 					None => None,
 				};
 
+				testdict = dict.clone();
+
 				let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match reader_type {
 					"NewlineAndSkip" => {
 
@@ -373,11 +378,14 @@ pub fn run_test<T: 'static>(config_file: &str)
 	let buf2 = buf_option.clone();
 	let comp_buf2 = compre_buf_option.clone();
 
+	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
+	kernel.dict_pre_process();
 
     //let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
-	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
-	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
-	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,|x|(fourier_compress(x)));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
+	//let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,FourierCompress::new(10,10));
+	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
+	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 
 	/* Construct the runtime */
 	let rt = match config.lookup("runtime") {
@@ -414,23 +422,23 @@ pub fn run_test<T: 'static>(config_file: &str)
 		spawn_handles.push(oneshot::spawn(sig, &executor))
 	}
 
-	let handle = thread::spawn(move || {
-		println!("Run compression demon" );
-		compress_demon.run();
-		println!("segment commpressed: {}", compress_demon.get_processed() );
-	});
+//	let handle = thread::spawn(move || {
+//		println!("Run compression demon" );
+//		compress_demon.run();
+//		println!("segment commpressed: {}", compress_demon.get_processed() );
+//	});
 
-	let handle1 = thread::spawn(move || {
-		println!("Run compression demon 1" );
-		compress_demon1.run();
-		println!("segment commpressed: {}", compress_demon1.get_processed() );
-	});
-
-	let handle2 = thread::spawn(move || {
-		println!("Run compression demon 2" );
-		compress_demon2.run();
-		println!("segment commpressed: {}", compress_demon2.get_processed() );
-	});
+//	let handle1 = thread::spawn(move || {
+//		println!("Run compression demon 1" );
+//		compress_demon1.run();
+//		println!("segment commpressed: {}", compress_demon1.get_processed() );
+//	});
+//
+//	let handle2 = thread::spawn(move || {
+//		println!("Run compression demon 2" );
+//		compress_demon2.run();
+//		println!("segment commpressed: {}", compress_demon2.get_processed() );
+//	});
 
 	for sh in spawn_handles {
 		match sh.wait() {
@@ -439,9 +447,9 @@ pub fn run_test<T: 'static>(config_file: &str)
 		}
 	}
 
-	handle.join().unwrap();
-	handle1.join().unwrap();
-	handle2.join().unwrap();
+	//handle.join().unwrap();
+	//handle1.join().unwrap();
+	//handle2.join().unwrap();
 
 	match rt.shutdown_on_idle().wait() {
 		Ok(_) => (),

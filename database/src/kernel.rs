@@ -20,6 +20,7 @@ use crate::methods::compress::CompressionMethod;
 #[derive(Clone)]
 pub struct Kernel<T> {
     dictionary: Array2<T>,
+    ffted_dictionary: Vec<Vec<Complex<T>>> ,
     gamma: usize,
     coeffs: usize,
     eigen_vec: Array2<T>,
@@ -31,6 +32,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
     pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize, batchsize: usize) -> Self {
         Kernel {
             dictionary: dictionary,
+            ffted_dictionary: Vec::new(),
             gamma: gamma,
             coeffs: coeffs,
             eigen_vec:  Array2::zeros((1, 1)),
@@ -40,12 +42,14 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
     }
 
     pub fn dict_pre_process(&mut self){
+        self.ffted_dictionary = fft_preprocess(&self.dictionary,self.coeffs);
+
         let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
         let mut w: Array2<T> = Array2::zeros((nrows_dic, nrows_dic));
         let mut dist_comp:usize= 0;
         for i in 0..nrows_dic {
             for j in 0..nrows_dic {
-                w[[i,j]] = SINKCompressed(self.dictionary.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
+                w[[i,j]] = opt_SINKCompressed(self.dictionary.row(i),self.dictionary.row(j), self.gamma,self.coeffs,self.ffted_dictionary[i].as_ref(),self.ffted_dictionary[j].as_ref());
                 dist_comp = dist_comp+1;
             }
         }
@@ -66,6 +70,8 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
 
 
     pub fn run(&self, x: Array2<T>){
+        let mut x_fft = fft_preprocess(&x,self.coeffs);
+
         let start = Instant::now();
         let (nrows_x, ncols_x) = (x.rows(),x.cols());
         let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
@@ -75,7 +81,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         for i in 0..nrows_x {
             //println!("{}",i);
             for j in 0..nrows_dic {
-                e[[i,j]] = SINKCompressed(x.row(i),self.dictionary.row(j), self.gamma,self.coeffs);
+                e[[i,j]] = opt_SINKCompressed(x.row(i),self.dictionary.row(j), self.gamma,self.coeffs,x_fft[i].as_ref(),self.ffted_dictionary[j].as_ref());
                 dist_comp = dist_comp + 1;
             }
         }
@@ -99,9 +105,10 @@ impl<T> CompressionMethod<T> for Kernel<T>
         self.batchsize
     }
 
-    fn run_compress(&self, mut segs: Vec<Segment<T>>) {
+    fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
         let mut batch_vec: Vec<T> = Vec::new();
-        for seg in &mut segs {
+        println!("segments size: {}", segs.len());
+        for seg in segs {
             batch_vec.extend(seg.get_data().clone());
 
         }
@@ -112,9 +119,96 @@ impl<T> CompressionMethod<T> for Kernel<T>
         self.run(x);
     }
 
-    fn run_decompress(&self, segs: Vec<Segment<T>>) {
+    fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
         unimplemented!()
     }
+}
+
+pub fn opt_SINKCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize,x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->T {
+    /*Shift INvariant Kernel*/
+    let sim = opt_sumExpNCCcCompressed(xrow,dic_row,gamma,k,x_fft,dict_fft)/((opt_sumExpNCCcCompressed(xrow,xrow,gamma,k,x_fft,x_fft)*(opt_sumExpNCCcCompressed(dic_row,dic_row,gamma,k,dict_fft,dict_fft))).sqrt());
+
+    sim
+}
+
+pub fn opt_sumExpNCCcCompressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize,x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>,) ->T {
+    let mut sim = opt_NCCcCompressed(xrow,dic_row,k,x_fft,dict_fft) ;
+    let exp_sim = sim.mapv(|e| (e * FromPrimitive::from_usize(gamma).unwrap()).exp());
+    let sum = exp_sim.sum();
+    //println!("sum:{:?}", sum);
+    sum
+}
+
+pub fn opt_NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize, x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->Array1<T>{
+    let len = max(xrow.len(),dic_row.len());
+    let fftlen = ((2*len-1) as f64).log2().ceil(); // fft length calculation
+    let mut size = (fftlen.exp2()) as usize;
+
+    let mut mul: Vec<Complex<T>> = x_fft.iter().zip(dict_fft).map(|(x,y)| x.mul(y.conj())).collect();
+
+    /* ifft*/
+    let mut iplanner = FFTplanner::new(true);
+    let ifft = iplanner.plan_fft(size);
+    //println!("size:{:?}",size);
+    let mut ioutput: Vec<Complex<T>> = vec![Complex::zero(); size];
+    //let mut cpxoutput: Vec<Complex<T>> = vec![Complex::zero(); size];
+
+    ifft.process(&mut mul, &mut ioutput);
+    //ifft.process(&mut cpx,&mut cpxoutput);
+    //println!("cpxput:{:?}",cpxoutput);
+    //println!("ioutput:{:?}",ioutput);
+    let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re).collect();
+    //println!("reioutput:{:?}",reioutput);
+
+    //
+    let to_del = size-2*len+1;
+    for i in 0..to_del{
+        reioutput.remove(len);
+    }
+
+    let mut cc_sequence  = Array1::from_vec(reioutput);
+    //println!("cc_sequence:{:?}",cc_sequence);
+
+    let norm = l2_norm(xrow.view()) * l2_norm(dic_row.view()) * FromPrimitive::from_usize(size).unwrap();
+    //println!("norm:{:?}",norm);
+
+    let res=cc_sequence.mapv_into(|e|e/norm);
+    //println!("normlized:{:?}",res);
+    res
+}
+
+
+pub fn fft_preprocess<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>(x: &Array2<T>,  comp: usize) -> Vec<Vec<Complex<T>>> {
+    let nrows = x.rows();
+    let mut ffted_x: Vec<Vec<Complex<T>>> = Vec::with_capacity(nrows);
+    for i in 0..nrows {
+        let row = x.row(i);
+        ffted_x.push(fft_with_leading(row,comp))
+    }
+    ffted_x
+}
+
+pub fn fft_with_leading<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, comp: usize)->Vec<Complex<T>>{
+    let len = xrow.len();
+    let fftlen = ((2*len-1) as f64).log2().ceil(); // fft length calculation
+    let mut size = (fftlen.exp2()) as usize;
+
+    let mut xinput: Vec<Complex<T>> = xrow.iter()
+        .map(|x| Complex::new(*x,Zero::zero()))
+        .collect();
+    xinput.resize(size,Complex::zero());
+    //println!("xinput:{:?}",xinput);
+    let mut xoutput: Vec<Complex<T>> = vec![Complex::zero(); size];
+
+    {
+        let mut planner = FFTplanner::new(false);
+        let fft = planner.plan_fft(size);
+        fft.process(&mut xinput, &mut xoutput);
+    }
+    //println!("xoutput:{:?}",xoutput);
+    leading_fft(&mut xoutput,comp);
+    return xoutput
+
 }
 
 pub fn SINKCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize) ->T {
@@ -131,7 +225,6 @@ pub fn sumExpNCCcCompressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + 
     //println!("sum:{:?}", sum);
     sum
 }
-
 
 pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize) ->Array1<T>{
     let len = max(xrow.len(),dic_row.len());
