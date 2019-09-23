@@ -21,6 +21,8 @@ queues = "1.1.0"
 nalgebra = "0.18.0"
 ndarray = "0.12.1"
 ndarray-linalg = ""
+flate2 = "1.0.11"
+parity-snappy = ""
 #ndarray-linalg = { version = "0.11", features = ["openblas"] }
 #ndarray-linalg = { version = "0.11", features = ["netlib"] }
 #ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }

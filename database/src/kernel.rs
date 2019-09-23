@@ -105,7 +105,7 @@ impl<T> CompressionMethod<T> for Kernel<T>
         self.batchsize
     }
 
-    fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+    fn run_compress<'a>(&self, segs: &mut Vec<Segment<T>>) {
         let mut batch_vec: Vec<T> = Vec::new();
         println!("segments size: {}", segs.len());
         for seg in segs {

@@ -435,7 +435,7 @@ impl<T> CompressionMethod<T> for PAACompress
 		self.batchsize
 	}
 
-	fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+	fn run_compress<'a>(&self, segs: &mut Vec<Segment<T>>) {
 		for seg in segs {
 			paa_compress(seg,self.chunksize);
 		}
@@ -476,7 +476,7 @@ impl<'a,T> CompressionMethod<T> for FourierCompress
 		self.batchsize
 	}
 
-	fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+	fn run_compress<'b>(&self, segs: &mut Vec<Segment<T>>) {
 		for seg in segs {
 			fourier_compress(seg);
 		}
@@ -744,3 +744,4 @@ fn test_key_byte_conversion() {
 		panic!("Failed to convert key into bytes");
 	}
 }
+
