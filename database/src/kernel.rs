@@ -68,7 +68,6 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         println!("eigen vec shape:{}*{}", self.eigen_vec.rows(),self.eigen_vec.cols())
     }
 
-
     pub fn run(&self, x: Array2<T>){
         let mut x_fft = fft_preprocess(&x,self.coeffs);
 
@@ -92,6 +91,58 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         let duration = start.elapsed();
         //println!("Time elapsed in kernel function() is: {:?}", duration);
     }
+
+
+    pub fn RBFdict_pre_process(&mut self){
+        let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
+        let mut w: Array2<T> = Array2::zeros((nrows_dic, nrows_dic));
+        let mut dist_comp:usize= 0;
+        for i in 0..nrows_dic {
+            for j in 0..nrows_dic {
+                w[[i,j]] = RBFkernel(self.dictionary.row(i),self.dictionary.row(j), 0.4);
+                dist_comp = dist_comp+1;
+            }
+        }
+        let (val, vecs) = w.clone().eigh(UPLO::Upper).unwrap();
+        println!("eigenvalues = \n{:?}", val);
+        //println!("V = \n{:?}", vecs);
+        let size_eig = val.len();
+        let mut one_2d = Array2::ones((size_eig,1));
+        let mut val_2d = Array2::from_shape_vec((size_eig,1), val.to_vec()).unwrap();
+        let mut inv_val_2d= one_2d/val_2d;
+        let sqrt_val = inv_val_2d.map(|x|Scalar::from_real(x.sqrt()));
+        let mut dia = Array2::eye(size_eig);
+        let mut va = dia.dot(&sqrt_val);
+        self.in_eigen_val = va;
+        self.eigen_vec = vecs;
+        println!("eigen vec shape:{}*{}", self.eigen_vec.rows(),self.eigen_vec.cols())
+    }
+
+
+    pub fn RBFrun(&self, mut x: Array2<T>){
+        let mut x_fft = fft_preprocess(&x,self.coeffs);
+
+        let start = Instant::now();
+        let (nrows_x, ncols_x) = (x.rows(),x.cols());
+        let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
+        let mut e: Array2<T> = Array2::zeros((nrows_x, nrows_dic));
+        let mut dist_comp:usize= 0;
+
+        for i in 0..nrows_x {
+            //println!("{}",i);
+            for j in 0..nrows_dic {
+                e[[i,j]] = RBFkernel(x.row(i),self.dictionary.row(j), 0.4);
+                dist_comp = dist_comp + 1;
+            }
+        }
+
+        let mut z_exact = e.dot(&self.eigen_vec);
+        z_exact = z_exact.dot(&self.in_eigen_val);
+
+        let duration = start.elapsed();
+        //println!("Time elapsed in kernel function() is: {:?}", duration);
+    }
+
 }
 
 
@@ -116,7 +167,7 @@ impl<T> CompressionMethod<T> for Kernel<T>
         println!("vec for matrix length: {}", belesize);
         let mut x = Array2::from_shape_vec((self.batchsize,belesize/self.batchsize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
         println!("matrix shape: {} * {}", x.rows(), x.cols());
-        self.run(x);
+        self.RBFrun(x);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -215,6 +266,16 @@ pub fn SINKCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float 
     /*Shift INvariant Kernel*/
     let sim = sumExpNCCcCompressed(xrow,dic_row,gamma,k)/((sumExpNCCcCompressed(xrow,xrow,gamma,k)*(sumExpNCCcCompressed(dic_row,dic_row,gamma,k))).sqrt());
 
+    sim
+}
+
+pub fn RBFkernel<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, sigma: f32) ->T {
+    /*Radial basis function kernel*/
+    let diff = &xrow - &dic_row;
+    //println!("diff:{:?}",diff);
+    let l2norm = l2_norm(diff.view());
+    let sigma_t = FromPrimitive::from_f32(sigma).unwrap();
+    let sim = T::one()/((l2norm/FromPrimitive::from_usize(2).unwrap()* sigma_t * sigma_t).exp());
     sim
 }
 
