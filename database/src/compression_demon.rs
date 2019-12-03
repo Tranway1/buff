@@ -59,7 +59,7 @@ impl<T,U,F> CompressionDemon<T,U,F>
 					let mut segs = Vec::with_capacity(batch_size);
 					loop {
 						match buf.remove_segment(){
-							Ok(mut seg) => {
+							Ok(seg) => {
 								segs.push(seg);
 								if segs.len() == batch_size{
 									break;

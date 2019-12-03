@@ -90,7 +90,7 @@ impl<T,U> FileManager<T,U> for rocksdb::DB
 
 const FILEPATH: &str = "../rocksdb";
 
-fn read_write_validate<'a,T:Send>(fm: &FileManager<Vec<u8>,DBVector>, seg: &Segment<T>) -> DBVector
+fn read_write_validate<'a,T:Send>(fm: &FileManager<Vec<u8>,DBVector>, seg: &mut Segment<T>) -> DBVector
 	where T: Clone + Serialize + Deserialize<'a> + Debug + PartialEq
 {
 	let seg_key = seg.get_key();
@@ -143,8 +143,8 @@ fn read_write_test() {
 			random_f32signal(x), None, None,
 		)}).collect();
 
-	for seg in segs {
-		let inflated_seg_bytes = read_write_validate(&fm, &seg).as_ref().iter()
+	for mut seg in segs {
+		let inflated_seg_bytes = read_write_validate(&fm, &mut seg).as_ref().iter()
         .cloned()
         .decode(&mut BZip2Decoder::new())
         .collect::<Result<Vec<_>, _>>()

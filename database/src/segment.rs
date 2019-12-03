@@ -130,6 +130,13 @@ impl<'a,T> Segment<T>
 		}
 	}
 
+	pub fn get_byte_size(&self) -> Result<usize,()> {
+		match bincode::serialized_size(self) {
+			Ok(bsize) => Ok(bsize as usize),
+			Err(_)  => Err(())
+		}
+	}
+
 	pub fn convert_from_bytes(bytes: &'a [u8]) -> Result<Segment<T>,()> {
 		match bincode::deserialize(bytes) {
 			Ok(seg) => Ok(seg),

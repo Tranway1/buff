@@ -20,6 +20,7 @@ use crate::kernel::Kernel;
 use rustfft::FFTnum;
 use num::Float;
 use ndarray_linalg::Lapack;
+use std::ptr::null;
 
 pub type SignalId = u64;
 const DEFAULT_BATCH_SIZE: usize = 50;
@@ -44,7 +45,7 @@ pub struct BufferedSignal<T,U,F,G>
 	compress_on_segmentation: bool,
 	compression_percentage: f64,
 	segments_produced: u32,
-	kernel: Kernel<T>
+	kernel: Option<Kernel<T>>
 }
 
 /* Fix the buffer to not reuqire broad locking it */
@@ -61,8 +62,17 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 		compress_on_segmentation: bool, dict: Option<Array2<T>>)
 		-> BufferedSignal<T,U,F,G> 
 	{
-		let mut kernel= Kernel::new(dict.clone().unwrap(),1,4,DEFAULT_BATCH_SIZE);
-		kernel.dict_pre_process();
+		let mut kernel:Option<Kernel<T>>= match dict {
+			// The division was valid
+			Some(x) => {
+				let mut kernel_dict = Kernel::new(x.clone(), 1, 4, DEFAULT_BATCH_SIZE);
+				kernel_dict.dict_pre_process();
+				Some(kernel_dict)
+			},
+			// The division was invalid
+			None    => None,
+		};
+
 
 		BufferedSignal {
 			start: None,
@@ -162,7 +172,10 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							println!("vec for matrix length: {}", belesize);
 							let mut x = Array2::from_shape_vec((DEFAULT_BATCH_SIZE,self.seg_size),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
 							println!("matrix shape: {} * {}", x.rows(), x.cols());
-							self.kernel.run(x);
+							match &self.kernel{
+								Some(kn) => kn.run(x),
+								None => (),
+							};
 							println!("new vec for matrix length: {}", batch_vec.len());
 						}
 

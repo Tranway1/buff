@@ -1,12 +1,12 @@
 [package]
 name = "time_series_start"
 version = "0.1.0"
-authors = ["Drew Callahan <acallahan@cs.uchicago.edu>"]
+authors = ["Drew Callahan <acallahan@cs.uchicago.edu>","Chunwei Liu <chunwei@uchicago.edu>"]
 edition = "2018"
 
 [dependencies]
 num = "0.2"
-rocksdb = "0.12.2"
+rocksdb = "0.12.4"
 rustfft = "3.0.0"
 serde = "1.0.90"
 bincode = "1.1.3"
@@ -20,9 +20,10 @@ toml-loader = "0.1.1"
 queues = "1.1.0"
 nalgebra = "0.18.0"
 ndarray = "0.12.1"
-ndarray-linalg = ""
+#ndarray-linalg = {version = "0.11"}
 flate2 = "1.0.11"
 parity-snappy = ""
 #ndarray-linalg = { version = "0.11", features = ["openblas"] }
 #ndarray-linalg = { version = "0.11", features = ["netlib"] }
-#ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
+ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
+tsz = "0.1.0"
