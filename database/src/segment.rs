@@ -411,12 +411,12 @@ pub fn paa_compress<T>(seg: &mut Segment<T>, chunk_size: usize)
 {
 
 	let zero = T::zero();
-	let paa_data = seg.data.chunks(chunk_size)
+	let paa_data:Vec<T> = seg.data.chunks(chunk_size)
 						   .map(|x| {
 								x.iter().fold(zero, |sum, &i| sum + i) / FromPrimitive::from_usize(x.len()).unwrap()
 						   })
 						   .collect();
-	println!("paa finished");
+//	println!("paa finished with length {}",paa_data.len());
 	seg.data = paa_data	
 }
 

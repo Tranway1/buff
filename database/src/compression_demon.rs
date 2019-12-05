@@ -147,8 +147,9 @@ impl<T,U,F> CompressionDemon<T,U,F>
 					println!("Buffer is empty. Compression process exit.");
 					break
 				},
-				Err(_)=>{
+				Err(e)=>{
 					//println!("No segment is fetched, try again.");
+					//println!("Application error: {:?}",e);
 					continue
 				},
 			}

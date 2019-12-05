@@ -140,7 +140,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         z_exact = z_exact.dot(&self.in_eigen_val);
 
         let duration = start.elapsed();
-        //println!("Time elapsed in kernel function() is: {:?}", duration);
+        println!("Time elapsed in kernel function() is: {:?}", duration);
     }
 
 }
