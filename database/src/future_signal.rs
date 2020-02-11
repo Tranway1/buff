@@ -161,7 +161,7 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							}
 							None => None,
 						};
-
+						//todo: adjust logics here to fix kernel method.
 						if bsize<DEFAULT_BATCH_SIZE{
 							//batch_vec.extend(&data);
 							//bsize= bsize+1;
@@ -188,6 +188,7 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							let after = self.data.len() as f64;
 							self.compression_percentage += after/before;
 						}
+
 
 						match self.buffer.lock() {
 							Ok(mut buf) => match buf.put(seg) {

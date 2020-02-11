@@ -388,7 +388,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 
 //    let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
 //	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
-	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,SnappyCompress::new(10,10));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,DeflateCompress::new(10,10));
 //	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 //	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 
@@ -419,6 +419,12 @@ pub fn run_test<T: 'static>(config_file: &str)
 		}
 	};
 
+	let handle = thread::spawn(move || {
+		println!("Run compression demon" );
+		compress_demon.run();
+		println!("segment commpressed: {}", compress_demon.get_processed() );
+	});
+
 	let executor = rt.executor();
 
 	let mut spawn_handles: Vec<oneshot::SpawnHandle<Option<SystemTime>,()>> = Vec::new();
@@ -427,11 +433,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 		spawn_handles.push(oneshot::spawn(sig, &executor))
 	}
 
-	let handle = thread::spawn(move || {
-		println!("Run compression demon" );
-		compress_demon.run();
-		println!("segment commpressed: {}", compress_demon.get_processed() );
-	});
+
 
 //	let handle1 = thread::spawn(move || {
 //		println!("Run compression demon 1" );
@@ -774,19 +776,19 @@ pub fn run_single_test<T: 'static>(config_file: &str)
 
 	let buf = buf_option.clone();
 	let comp_buf = compre_buf_option.clone();
-	let buf1 = buf_option.clone();
-	let comp_buf1 = compre_buf_option.clone();
-	let buf2 = buf_option.clone();
-	let comp_buf2 = compre_buf_option.clone();
+//	let buf1 = buf_option.clone();
+//	let comp_buf1 = compre_buf_option.clone();
+//	let buf2 = buf_option.clone();
+//	let comp_buf2 = compre_buf_option.clone();
 
 	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
 	kernel.RBFdict_pre_process();
 
 	//let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
-	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
-	//let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,SnappyCompress::new(10,10));
-	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
-	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.0,GZipCompress::new(10,10));
+//	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,SnappyCompress::new(10,10));
+//	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
+//	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 
 	/* Construct the runtime */
 	let rt = match config.lookup("runtime") {
@@ -815,6 +817,13 @@ pub fn run_single_test<T: 'static>(config_file: &str)
 		}
 	};
 
+
+	let handle = thread::spawn(move || {
+		println!("Run compression demon" );
+		compress_demon.run();
+		println!("segment commpressed: {}", compress_demon.get_processed() );
+	});
+
 	let executor = rt.executor();
 
 	let mut spawn_handles: Vec<oneshot::SpawnHandle<Option<SystemTime>,()>> = Vec::new();
@@ -823,11 +832,6 @@ pub fn run_single_test<T: 'static>(config_file: &str)
 		spawn_handles.push(oneshot::spawn(sig, &executor))
 	}
 
-//	let handle = thread::spawn(move || {
-		println!("Run compression demon" );
-		compress_demon.run();
-		println!("segment commpressed: {}", compress_demon.get_processed() );
-//	});
 
 //	let handle1 = thread::spawn(move || {
 //		println!("Run compression demon 1" );

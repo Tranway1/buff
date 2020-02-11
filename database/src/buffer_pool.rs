@@ -288,7 +288,7 @@ impl<T,U> ClockBuffer<T,U>
 
 	fn put_with_key(&mut self, key: SegmentKey, seg: Segment<T>) -> Result<(), BufErr> {
 		let slot = if self.buffer.len() >= self.buf_size {
-			let slot = self.evict()?;
+			let slot = self.evict_no_saving()?;
 			self.clock[slot] = (key,true);
 			slot
 		} else {
@@ -373,6 +373,20 @@ impl<T,U> ClockBuffer<T,U>
 			} else {
 				self.clock[self.hand].1 = false;
 			} 
+
+			self.update_hand();
+		}
+	}
+
+	fn evict_no_saving(&mut self) -> Result<usize,BufErr> {
+		loop {
+			if let (seg_key,false) = self.clock[self.hand] {
+				self.buffer.remove(&seg_key);
+				self.clock_map.remove(&seg_key);
+				return Ok(self.hand)
+			} else {
+				self.clock[self.hand].1 = false;
+			}
 
 			self.update_hand();
 		}

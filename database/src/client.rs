@@ -163,7 +163,7 @@ fn construct_file_iterator<T>(file: &str, delim: u8) -> Result<impl Iterator<Ite
 /* Must use type annotation on function to declare what to 
  * parse CSV entries as 
  */
-fn construct_file_iterator_skip_newline<T>(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=T>,()> 
+pub fn construct_file_iterator_skip_newline<T>(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=T>,()>
 	where T: FromStr
 {
 	let f = match File::open(file) {
