@@ -494,7 +494,7 @@ pub fn test_fourier_compress_on_file<'a,T>(file:&str)
     let comp = FourierCompress::new(10,10);
     let compressed = fourier_compress(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in Fourier compress function() is: {:?}", duration);
+    info!("Time elapsed in Fourier compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
