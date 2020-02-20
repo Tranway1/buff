@@ -4,8 +4,19 @@ version = "0.1.0"
 authors = ["Drew Callahan <acallahan@cs.uchicago.edu>","Chunwei Liu <chunwei@uchicago.edu>"]
 edition = "2018"
 
+[[bin]]
+name = "time_series_start"
+path = "src/main.rs"
+
+[[bin]]
+name = "compress"
+path = "src/methods/main.rs"
+
+
 [dependencies]
 num = "0.2"
+log4rs = "0.10.0"
+log = "0.4.8"
 rocksdb = "0.12.4"
 rustfft = "3.0.1"
 serde = "1.0.90"
@@ -27,3 +38,4 @@ parity-snappy = ""
 #ndarray-linalg = { version = "0.11", features = ["netlib"] }
 ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
 tsz = "0.1.0"
+bitpacking = "0.8.2"

@@ -114,7 +114,6 @@ impl<T> Segment<T> {
 	}
 
 	pub fn get_data(&self) ->  &Vec<T>
-		where T: Clone
 	{
 		&self.data
 	}

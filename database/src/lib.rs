@@ -61,6 +61,7 @@ use std::thread;
 use crate::kernel::Kernel;
 use crate::methods::compress::{GZipCompress, ZlibCompress, DeflateCompress, SnappyCompress, GorillaCompress};
 use crate::methods::Methods::Fourier;
+use crate::methods::int_encoder::StdEncoder;
 
 const DEFAULT_BUF_SIZE: usize = 150;
 const DEFAULT_DELIM: char = '\n';

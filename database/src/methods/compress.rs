@@ -3,7 +3,10 @@ use crate::segment::{Segment, PAACompress, FourierCompress, fourier_compress, pa
 use ndarray::Array2;
 extern crate flate2;
 extern crate tsz;
+use log::{info, trace, warn};
 
+extern crate bitpacking;
+use bitpacking::{BitPacker4x, BitPacker};
 use std::vec::Vec;
 use tsz::{DataPoint, Encode, Decode, StdEncoder, StdDecoder};
 use tsz::stream::{BufferedReader, BufferedWriter};
@@ -11,7 +14,7 @@ use tsz::decode::Error;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use std::{io, env};
+use std::{io, env, mem};
 use std::io::prelude::*;
 use flate2::write::ZlibEncoder;
 use serde::{Serialize, Deserialize};
@@ -20,8 +23,13 @@ use self::flate2::write::DeflateEncoder;
 use parity_snappy as snappy;
 use parity_snappy::{compress, decompress};
 use std::time::{SystemTime, Instant};
-use crate::client::{construct_file_client_skip_newline,construct_file_iterator_skip_newline};
+use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int};
 use crate::methods::Methods::Fourier;
+use self::bitpacking::BitPacker1x;
+use crate::methods::bit_packing::BP_encoder;
+use std::str::FromStr;
+use num::{FromPrimitive, Num};
+use rustfft::FFTnum;
 
 pub trait CompressionMethod<T> {
 
@@ -33,6 +41,54 @@ pub trait CompressionMethod<T> {
     fn run_compress<'a>(&self, segs: &mut Vec<Segment<T>>);
 
 	fn run_decompress(&self, segs: &mut Vec<Segment<T>>);
+}
+
+
+#[derive(Clone)]
+pub struct BPCompress {
+    chunksize: usize,
+    batchsize: usize
+}
+
+impl BPCompress {
+    pub fn new(chunksize: usize, batchsize: usize) -> Self {
+        BPCompress { chunksize, batchsize }
+    }
+
+    fn encode (&self, seg: &mut Segment<u32>){
+        let comp = BP_encoder(seg.get_data().as_slice());
+    }
+
+    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
+    // Here &[u8] implements BufRead
+    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
+            unimplemented!()
+    }
+}
+
+impl CompressionMethod<u32> for BPCompress
+    {
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, segs: &mut Vec<Segment<u32>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<u32>>) {
+        unimplemented!()
+    }
 }
 
 
@@ -51,15 +107,15 @@ impl GZipCompress {
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
         let mut e = GzEncoder::new(Vec::new(), Compression::fast());
-        let bytes = seg.convert_to_bytes();
-//        let start = Instant::now();
-        e.write_all(bytes.unwrap().as_slice()).unwrap();
+        let origin_bin =seg.convert_to_bytes().unwrap();
+        info!("original size:{}", origin_bin.len());
+        e.write_all(origin_bin.as_slice()).unwrap();
         //println!("orignal file size:{}", seg.get_byte_size().unwrap());
         let bytes = e.finish().unwrap();
-//        let duration = start.elapsed();
-//        println!("Time elapsed in Gzip compression for each page: {:?}", duration);
-        //println!("compressed size:{}", bytes.len());
+        info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
+        let ratio = bytes.len() as f64 /origin_bin.len() as f64;
+        print!("{}",ratio);
     }
 
     // Uncompresses a Gz Encoded vector of bytes and returns a string or error
@@ -89,7 +145,7 @@ impl<'a, T> CompressionMethod<T> for GZipCompress
         }
 
         let duration = start.elapsed();
-        println!("Time elapsed in Gzip function() is: {:?}", duration);
+        info!("Time elapsed in Gzip function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -113,10 +169,15 @@ impl DeflateCompress {
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
         let mut e = DeflateEncoder::new(Vec::new(), Compression::fast());
-        e.write_all(seg.convert_to_bytes().unwrap().as_slice()).unwrap();
+        let origin_bin =seg.convert_to_bytes().unwrap();
+        info!("original size:{}", origin_bin.len());
+        e.write_all(origin_bin.as_slice()).unwrap();
         let bytes = e.finish().unwrap();
-        println!("compressed size:{}", bytes.len());
+        info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
+        let ratio = bytes.len() as f64 /origin_bin.len() as f64;
+        print!("{}",ratio);
+
     }
 
     // Uncompresses a deflte Encoded vector of bytes and returns a string or error
@@ -145,7 +206,7 @@ impl<'a, T> CompressionMethod<T> for DeflateCompress
             self.encode(seg);
         }
         let duration = start.elapsed();
-        println!("Time elapsed in Deflate function() is: {:?}", duration);
+        info!("Time elapsed in Deflate function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -171,10 +232,13 @@ impl ZlibCompress {
         where T: Serialize + Deserialize<'a>{
         let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
         let origin_bin =seg.convert_to_bytes().unwrap();
-        println!("original size:{}", origin_bin.len());
+        info!("original size:{}", origin_bin.len());
         e.write_all(origin_bin.as_slice()).unwrap();
         let bytes = e.finish().unwrap();
-        println!("compressed size:{}", bytes.len());
+        info!("compressed size:{}", bytes.len());
+        //println!("{}", decode_reader(bytes).unwrap());
+        let ratio = bytes.len() as f64 /origin_bin.len() as f64;
+        print!("{}",ratio);
     }
 
     // Uncompresses a zl Encoded vector of bytes and returns a string or error
@@ -228,9 +292,13 @@ impl SnappyCompress {
     // Compress a sample string and print it after transformation.
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
-        let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
-        println!("compressed size:{}", bytes.len());
+        let origin_bin =seg.convert_to_bytes().unwrap();
+        info!("original size:{}", origin_bin.len());
+        let bytes = compress(origin_bin.as_slice());
+        info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
+        let ratio = bytes.len() as f64 /origin_bin.len() as f64;
+        print!("{}",ratio);
     }
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error
@@ -258,7 +326,7 @@ impl<'a, T> CompressionMethod<T> for SnappyCompress
             self.encode(seg);
         }
         let duration = start.elapsed();
-        println!("Time elapsed in Snappy function() is: {:?}", duration);
+        info!("Time elapsed in Snappy function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -293,13 +361,18 @@ impl GorillaCompress {
             let v = (*val).into();
             let dp = DataPoint::new(t, v);
             actual_datapoints.push(dp);
+            t+=1;
         }
+        let origin = t * 16;
+        info!("original size:{}", origin);
         for dp in &actual_datapoints {
             encoder.encode(*dp);
         }
         let bytes = encoder.close();
         let byte_vec = bytes.to_vec();
-        println!("compressed size:{}", byte_vec.len());
+        info!("compressed size:{}", byte_vec.len());
+        let ratio = bytes.len() as f64 /origin as f64;
+        print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
         //println!("{}", decode_reader(bytes).unwrap());
@@ -351,7 +424,7 @@ impl<'a, T> CompressionMethod<T> for GorillaCompress
             self.encode(seg);
         }
         let duration = start.elapsed();
-        println!("Time elapsed in Gorilla function() is: {:?}", duration);
+        info!("Time elapsed in Gorilla function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -371,18 +444,313 @@ fn run_snappy() {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     println!("Time elapsed in Snappy compress function() is: {:?}", duration);
+}
+
+
+
+
+
+pub fn test_paa_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone + Copy + FromPrimitive+Num{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = PAACompress::new(10,10);
+    let window = 100;
+    let compressed = paa_compress(&mut seg, window);
+    let duration = start.elapsed();
+    info!("Time elapsed in PAA compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!("{},    {}", 1.0/window as f32, throughput);
+}
+
+pub fn test_paa_compress_on_int_file(file:&str){
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = PAACompress::new(10,10);
+    let window = 100;
+    let compressed = paa_compress(&mut seg, window);
+    let duration = start.elapsed();
+    info!("Time elapsed in PAA compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<u32>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!("{},    {}", 1.0/window as f32, throughput);
+}
+
+pub fn test_fourier_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone + FFTnum +Serialize+ Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = FourierCompress::new(10,10);
+    let compressed = fourier_compress(&mut seg);
+    let duration = start.elapsed();
+    println!("Time elapsed in Fourier compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!("1,    {}", throughput);
+}
+
+//pub fn test_fourier_compress_on_int_file(file:&str){
+//    let file_iter = construct_file_iterator_int(file, 1, ',');
+//    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+//    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+//    let start = Instant::now();
+//    let comp = FourierCompress::new(10,10);
+//    let compressed = fourier_compress(&mut seg);
+//    let duration = start.elapsed();
+//    info!("Time elapsed in Fourier compress function() is: {:?}", duration);
+//    //let decompress = comp.decode(compressed);
+//    //println!("expected datapoints: {:?}", decompress);
+//    let org_size = file_vec.len() * mem::size_of::<u32>();
+//    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+//    println!("1,    {}", throughput);
+//}
+
+pub fn test_snappy_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone+Serialize + Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = SnappyCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Snappy compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_snappy_compress_on_int_file(file:&str){
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = SnappyCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Snappy compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<u32>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+pub fn test_deflate_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone+Serialize + Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = DeflateCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Deflate compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_deflate_compress_on_int_file(file:&str){
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = DeflateCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Deflate compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<u32>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+pub fn test_gzip_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone+Serialize + Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = GZipCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Gzip compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+
+pub fn test_gzip_compress_on_int_file(file:&str){
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = GZipCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in Gzip compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<u32>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+
+
+pub fn test_zlib_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone+Serialize + Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = ZlibCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in zlib compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_zlib_compress_on_int_file(file:&str) {
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = ZlibCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in zlib compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<u32>();
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+pub fn test_grilla_compress_on_file<'a,T>(file: &str)
+    where T: FromStr + Serialize + Clone +Copy+Into<f64> + Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = GorillaCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in grilla compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+//    let org_size = file_vec.len() * mem::size_of::<T>();
+    let org_size = file_vec.len() * 16;
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_grilla_compress_on_int_file(file: &str) {
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = GorillaCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in grilla compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+//    let org_size = file_vec.len()*4;
+    let org_size = file_vec.len() * 16;
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
+}
+
+
+
+pub fn test_BP_compress_on_int(file:&str) {
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = BPCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in BP compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*4;
+    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    println!(",    {}", throughput);
 }
 
 
 
 #[test]
+fn test_bit_packing_on_int() {
+
+// Detects if `SSE3` is available on the current computed
+// and uses the best available implementation accordingly.
+    let bitpacker = BitPacker1x::new();
+
+    let my_data = vec![1391, 1756, 532, 1912, 569, 382, 1520, 1238, 795, 1742, 1867, 665, 1972, 1342, 1205, 1717,
+                       722, 1182, 961, 1623, 470, 8, 321, 789, 1448, 1022, 783, 941, 1204, 196, 866, 1555];
+    println!("Time elapsed in zlib compress fu");
+// Computes the number of bits used for each integers in the blocks.
+// my_data is assumed to have a len of 128 for `BitPacker4x`.
+    let num_bits: u8 = bitpacker.num_bits(&my_data);
+
+// The compressed array will take exactly `num_bits * BitPacker4x::BLOCK_LEN / 8`.
+// But it is ok to have an output with a different len as long as it is larger
+// than this.
+    let mut compressed = vec![0u8; 4 * BitPacker1x::BLOCK_LEN];
+
+// Compress returns the len.
+    let compressed_len = bitpacker.compress(&my_data, &mut compressed[..], num_bits);
+    assert_eq!((num_bits as usize) * BitPacker1x::BLOCK_LEN / 8, compressed_len);
+
+// Decompressing
+    let mut decompressed = vec![0u32; BitPacker1x::BLOCK_LEN];
+
+    bitpacker.decompress(&compressed[..compressed_len], &mut decompressed[..], num_bits);
+    println!("decompressed: {:?}", decompressed.as_slice());
+    assert_eq!(&my_data, &decompressed);
+}
+
+#[test]
 fn test_zlib_compress() {
-	let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
-	e.write_all(b"foo");
-	e.write_all(b"bar");
-	let compressed_bytes = e.finish();
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
+    e.write_all(b"foo");
+    e.write_all(b"bar");
+    let compressed_bytes = e.finish();
 }
 
 #[test]
@@ -463,124 +831,4 @@ fn test_Grilla_compress() {
 
     println!("actual datapoints: {:?}", actual_datapoints);
     println!("expected datapoints: {:?}", expected_datapoints);
-}
-
-#[test]
-fn test_paa_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = PAACompress::new(10,10);
-    let compressed = paa_compress(&mut seg, 100);
-    let duration = start.elapsed();
-    println!("Time elapsed in PAA compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-#[test]
-fn test_fourier_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = FourierCompress::new(10,10);
-    let compressed = fourier_compress(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in Fourier compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-#[test]
-fn test_snappy_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = SnappyCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in Snappy compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-
-#[test]
-fn test_deflate_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-1k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = DeflateCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in Deflate compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-
-
-#[test]
-fn test_gzip_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = GZipCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in Gzip compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-
-
-#[test]
-fn test_zlib_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = ZlibCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in zlib compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-
-#[test]
-fn test_grilla_compress_on_file() {
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = GorillaCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in grilla compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
-}
-
-
-
-#[test]
-fn test_zlib_compress_on_int() {
-    let file_iter = construct_file_iterator_skip_newline::<i32>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<i32> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = ZlibCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in zlib compress function() is: {:?}", duration);
-    //let decompress = comp.decode(compressed);
-    //println!("expected datapoints: {:?}", decompress);
 }

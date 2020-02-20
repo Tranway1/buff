@@ -184,6 +184,28 @@ pub fn construct_file_iterator_skip_newline<T>(file: &str, skip_val: usize, deli
 	)
 }
 
+pub fn construct_file_iterator_int(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=u32>,()>
+{
+	let f = match File::open(file) {
+		Ok(f) => f,
+		Err(_) => return Err(()),
+	};
+
+	Ok(BufReader::new(f)
+		.lines()
+		.filter_map(Result::ok)
+		.flat_map(move |line: String| {
+			line.split(delim)
+				.skip(skip_val)
+				.filter_map(|item: &str| item.parse::<f32>().ok())
+				.map(|x| x.ceil().abs() as u32)
+				.collect::<Vec<u32>>()
+				.into_iter()
+		})
+	)
+}
+
+
 
 pub fn construct_file_client<T>(file: &str, delim: u8, amount: Amount, 
 						 run_period: RunPeriod, frequency: Frequency)
