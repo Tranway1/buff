@@ -1,5 +1,5 @@
 cd /mnt/hdd-2T-3/chunwei/TimeSeriesDB/database;
-for comp in grilla zlib paa fourier snappy deflate gzip bp;
+for comp in grilla zlib paa fourier snappy deflate gzip bp deltabp;
 do 
 	for type in u32 f32 f64;
 		do 

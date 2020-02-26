@@ -263,6 +263,20 @@ pub(crate) fn BP_encoder(mydata: &[u32]) -> Vec<u8>{
     let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
     print!("{}",ratio);
     vec
+}
+
+pub(crate) fn deltaBP_encoder(mydata: &[i32]) -> Vec<u8>{
+    let (num_bits, delta_vec) = delta_num_bits(mydata);
+    info!("Number of bits: {}", num_bits);
+    let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    for &b in delta_vec.as_slice() {
+        bitpack_vec.write(b, num_bits as usize).unwrap();
+    }
+    let vec = bitpack_vec.into_vec();
+    info!("Length of compressed data: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
+    print!("{}",ratio);
+    vec
 
 }
 

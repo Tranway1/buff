@@ -23,10 +23,10 @@ use self::flate2::write::DeflateEncoder;
 use parity_snappy as snappy;
 use parity_snappy::{compress, decompress};
 use std::time::{SystemTime, Instant};
-use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int};
+use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
 use crate::methods::Methods::Fourier;
 use self::bitpacking::BitPacker1x;
-use crate::methods::bit_packing::BP_encoder;
+use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder};
 use std::str::FromStr;
 use num::{FromPrimitive, Num};
 use rustfft::FFTnum;
@@ -59,8 +59,8 @@ impl FCMCompress {
 
     fn encode<T> (&self, seg: &mut Segment<T>)
         where T: Clone + Eq + Hash +Copy + Num{
-        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
-        fcm.differential_compress();
+//        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
+//        fcm.differential_compress();
     }
 
     // Uncompresses a Gz Encoded vector of bytes and returns a string or error
@@ -143,6 +143,52 @@ impl CompressionMethod<u32> for BPCompress
     }
 }
 
+#[derive(Clone)]
+pub struct DeltaBPCompress {
+    chunksize: usize,
+    batchsize: usize
+}
+
+impl DeltaBPCompress {
+    pub fn new(chunksize: usize, batchsize: usize) -> Self {
+        DeltaBPCompress { chunksize, batchsize }
+    }
+
+    fn encode (&self, seg: &mut Segment<i32>){
+        let comp = deltaBP_encoder(seg.get_data().as_slice());
+    }
+
+    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
+    // Here &[u8] implements BufRead
+    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
+        unimplemented!()
+    }
+}
+
+impl CompressionMethod<i32> for DeltaBPCompress
+{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, segs: &mut Vec<Segment<i32>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<i32>>) {
+        unimplemented!()
+    }
+}
 
 #[derive(Clone)]
 pub struct GZipCompress {
@@ -756,6 +802,23 @@ pub fn test_BP_compress_on_int(file:&str) {
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = BPCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in BP compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*4;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_deltaBP_compress_on_int(file:&str) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',');
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
+
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = DeltaBPCompress::new(10,10);
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     info!("Time elapsed in BP compress function() is: {:?}", duration);

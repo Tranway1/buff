@@ -205,6 +205,28 @@ pub fn construct_file_iterator_int(file: &str, skip_val: usize, delim: char) -> 
 	)
 }
 
+pub fn construct_file_iterator_int_signed(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=i32>,()>
+{
+	let f = match File::open(file) {
+		Ok(f) => f,
+		Err(_) => return Err(()),
+	};
+
+	Ok(BufReader::new(f)
+		.lines()
+		.filter_map(Result::ok)
+		.flat_map(move |line: String| {
+			line.split(delim)
+				.skip(skip_val)
+				.filter_map(|item: &str| item.parse::<f32>().ok())
+				.map(|x| x.ceil().abs() as i32)
+				.collect::<Vec<i32>>()
+				.into_iter()
+		})
+		//todo: avoid abs();
+	)
+}
+
 
 
 pub fn construct_file_client<T>(file: &str, delim: u8, amount: Amount, 

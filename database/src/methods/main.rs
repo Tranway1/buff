@@ -1,5 +1,5 @@
 use std::env;
-use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int};
+use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int, test_deltaBP_compress_on_int};
 use log::{error, info, warn};
 use log4rs;
 
@@ -72,6 +72,12 @@ fn main() {
         "bp" => {
             match data_type.as_str() {
                 "u32" => test_BP_compress_on_int(input_file),
+                _ => panic!("Data type not supported yet for BP."),
+            }
+        },
+        "deltabp" => {
+            match data_type.as_str() {
+                "i32" => test_deltaBP_compress_on_int(input_file),
                 _ => panic!("Data type not supported yet for BP."),
             }
         },
