@@ -30,6 +30,9 @@ use crate::methods::bit_packing::BP_encoder;
 use std::str::FromStr;
 use num::{FromPrimitive, Num};
 use rustfft::FFTnum;
+use crate::methods::fcm_encoder::FCMCompressor;
+use std::hash::Hash;
+use std::borrow::Borrow;
 
 pub trait CompressionMethod<T> {
 
@@ -41,6 +44,55 @@ pub trait CompressionMethod<T> {
     fn run_compress<'a>(&self, segs: &mut Vec<Segment<T>>);
 
 	fn run_decompress(&self, segs: &mut Vec<Segment<T>>);
+}
+
+#[derive(Clone)]
+pub struct FCMCompress {
+    chunksize: usize,
+    batchsize: usize
+}
+
+impl FCMCompress {
+    pub fn new(chunksize: usize, batchsize: usize) -> Self {
+        FCMCompress { chunksize, batchsize }
+    }
+
+    fn encode<T> (&self, seg: &mut Segment<T>)
+        where T: Clone + Eq + Hash +Copy + Num{
+        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
+        fcm.differential_compress();
+    }
+
+    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
+    // Here &[u8] implements BufRead
+    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
+        unimplemented!()
+    }
+}
+
+impl<T> CompressionMethod<T> for FCMCompress
+    where T:Clone+Eq +Hash+Copy+Num{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
+        unimplemented!()
+    }
 }
 
 
@@ -464,7 +516,7 @@ pub fn test_paa_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!("{},    {}", 1.0/window as f32, throughput);
 }
 
@@ -481,7 +533,7 @@ pub fn test_paa_compress_on_int_file(file:&str){
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<u32>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!("{},    {}", 1.0/window as f32, throughput);
 }
 
@@ -498,7 +550,7 @@ pub fn test_fourier_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!("1,    {}", throughput);
 }
 
@@ -531,7 +583,7 @@ pub fn test_snappy_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -547,7 +599,7 @@ pub fn test_snappy_compress_on_int_file(file:&str){
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<u32>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -565,7 +617,7 @@ pub fn test_deflate_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -581,7 +633,7 @@ pub fn test_deflate_compress_on_int_file(file:&str){
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<u32>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -599,7 +651,7 @@ pub fn test_gzip_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -617,7 +669,7 @@ pub fn test_gzip_compress_on_int_file(file:&str){
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<u32>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -637,7 +689,7 @@ pub fn test_zlib_compress_on_file<'a,T>(file:&str)
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -653,7 +705,7 @@ pub fn test_zlib_compress_on_int_file(file:&str) {
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<u32>();
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -672,7 +724,7 @@ pub fn test_grilla_compress_on_file<'a,T>(file: &str)
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len() * mem::size_of::<T>();
     let org_size = file_vec.len() * 16;
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -689,7 +741,7 @@ pub fn test_grilla_compress_on_int_file(file: &str) {
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len()*4;
     let org_size = file_vec.len() * 16;
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
@@ -708,10 +760,26 @@ pub fn test_BP_compress_on_int(file:&str) {
     let duration = start.elapsed();
     info!("Time elapsed in BP compress function() is: {:?}", duration);
     let org_size = file_vec.len()*4;
-    let throughput = 1000.0 * org_size as f64 / duration.as_millis() as f64;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
     println!(",    {}", throughput);
 }
 
+pub fn test_FCM_compress_on_int(file:&str) {
+    let file_iter = construct_file_iterator_int(file, 1, ',');
+    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = FCMCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in FCM compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*4;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
+    println!(",    {}", throughput);
+}
 
 
 #[test]

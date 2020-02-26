@@ -1,5 +1,7 @@
 use bitpacking::{BitPacker, BitPacker4x};
 use log::{info, trace, warn};
+use futures::future::err;
+use num::Num;
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
@@ -205,6 +207,48 @@ pub(crate) fn num_bits(mydata: &[u32]) -> u8{
     let lead = xor.leading_zeros();
     let bits:u8 = (32 -lead) as u8;
     bits
+}
+
+pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
+    let mut vec = Vec::new();
+    let mut xor:u32 = 0;
+    let mut delta = 0u32;
+    let mut min = 0i32;
+    let minValue = mydata.iter().min();
+    match minValue {
+        Some(&val) => min = val,
+        None => panic!("empty"),
+    }
+
+    for &b in mydata {
+        delta = (b - min) as u32;
+        vec.push(delta);
+        xor = xor | delta;
+    }
+    let lead = xor.leading_zeros();
+    let bits:u8 = (32 -lead) as u8;
+    (bits,vec)
+}
+
+pub(crate) fn differential<T: Clone+Copy+Num>(mydata: &[T]) -> Vec<T>{
+    let mut vec = Vec::new();
+    let mut xor:u32 = 0;
+    let mut delta = T::zero();
+    let mut pre = T::zero();
+    let mut i = 0;
+
+    for &b in mydata {
+        if i==0 {
+            delta = b;
+        }
+        else {
+            delta = b-pre;
+        }
+        vec.push(delta);
+        pre = b;
+        i += 1;
+    }
+    vec
 }
 
 pub(crate) fn BP_encoder(mydata: &[u32]) -> Vec<u8>{
