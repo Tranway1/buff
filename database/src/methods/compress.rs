@@ -58,20 +58,18 @@ impl FCMCompress {
     }
 
     fn encode<T> (&self, seg: &mut Segment<T>)
-        where T: Clone + Eq + Hash +Copy + Num{
-//        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
-//        fcm.differential_compress();
+        where T: Clone + Eq + Hash +Copy + Num + Into<u32>{
+        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
+        fcm.delta_compress();
     }
 
-    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
-    // Here &[u8] implements BufRead
     fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
         unimplemented!()
     }
 }
 
 impl<T> CompressionMethod<T> for FCMCompress
-    where T:Clone+Eq +Hash+Copy+Num{
+    where T:Clone+Eq +Hash+Copy+Num+Into<u32>{
     fn get_segments(&self) {
         unimplemented!()
     }

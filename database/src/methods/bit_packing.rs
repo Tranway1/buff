@@ -230,6 +230,29 @@ pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
     (bits,vec)
 }
 
+pub(crate) fn diff_num_bits(mydata: &[u32]) -> (u8,Vec<u32>){
+    let mut vec:Vec<i32> = Vec::new();
+    let mut min = 0u32;
+    let minValue = mydata.iter().min();
+    let mut pre = 0;
+    let mut diff = 0;
+    let mut i= 0;
+    match minValue {
+        Some(&val) => min = val,
+        None => panic!("empty"),
+    }
+
+    for &b in mydata {
+        println!("b {} - pre {}",b,pre);
+        diff = (b - pre) as i32;
+        vec.push(diff);
+        pre = b;
+        i+=1;
+    }
+    let (bits,vec1) = delta_num_bits(&vec);
+    (bits,vec1)
+}
+
 pub(crate) fn differential<T: Clone+Copy+Num>(mydata: &[T]) -> Vec<T>{
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
