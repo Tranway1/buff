@@ -184,7 +184,7 @@ pub fn construct_file_iterator_skip_newline<T>(file: &str, skip_val: usize, deli
 	)
 }
 
-pub fn construct_file_iterator_int(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=u32>,()>
+pub fn construct_file_iterator_int(file: &str, skip_val: usize, delim: char, scl:i32) -> Result<impl Iterator<Item=u32>,()>
 {
 	let f = match File::open(file) {
 		Ok(f) => f,
@@ -198,14 +198,14 @@ pub fn construct_file_iterator_int(file: &str, skip_val: usize, delim: char) -> 
 			line.split(delim)
 				.skip(skip_val)
 				.filter_map(|item: &str| item.parse::<f32>().ok())
-				.map(|x| x.ceil().abs() as u32)
+				.map(|x| (x*scl as f32).ceil().abs() as u32)
 				.collect::<Vec<u32>>()
 				.into_iter()
 		})
 	)
 }
 
-pub fn construct_file_iterator_int_signed(file: &str, skip_val: usize, delim: char) -> Result<impl Iterator<Item=i32>,()>
+pub fn construct_file_iterator_int_signed(file: &str, skip_val: usize, delim: char, scl:i32) -> Result<impl Iterator<Item=i32>,()>
 {
 	let f = match File::open(file) {
 		Ok(f) => f,
@@ -219,11 +219,10 @@ pub fn construct_file_iterator_int_signed(file: &str, skip_val: usize, delim: ch
 			line.split(delim)
 				.skip(skip_val)
 				.filter_map(|item: &str| item.parse::<f32>().ok())
-				.map(|x| x.ceil().abs() as i32)
+				.map(|x| (x*scl as f32).ceil() as i32)
 				.collect::<Vec<i32>>()
 				.into_iter()
 		})
-		//todo: avoid abs();
 	)
 }
 

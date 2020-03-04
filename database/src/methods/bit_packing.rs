@@ -210,11 +210,13 @@ pub(crate) fn num_bits(mydata: &[u32]) -> u8{
 }
 
 pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
     let mut delta = 0u32;
     let mut min = 0i32;
     let minValue = mydata.iter().min();
+    info!("min value:{}",minValue.unwrap());
     match minValue {
         Some(&val) => min = val,
         None => panic!("empty"),
@@ -227,29 +229,27 @@ pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
     }
     let lead = xor.leading_zeros();
     let bits:u8 = (32 -lead) as u8;
+    info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
     (bits,vec)
 }
 
-pub(crate) fn diff_num_bits(mydata: &[u32]) -> (u8,Vec<u32>){
+pub(crate) fn diff_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec:Vec<i32> = Vec::new();
-    let mut min = 0u32;
-    let minValue = mydata.iter().min();
     let mut pre = 0;
     let mut diff = 0;
     let mut i= 0;
-    match minValue {
-        Some(&val) => min = val,
-        None => panic!("empty"),
-    }
 
     for &b in mydata {
-        println!("b {} - pre {}",b,pre);
-        diff = (b - pre) as i32;
+        //println!("b {} - pre {}",b,pre);
+        diff = b - pre ;
         vec.push(diff);
         pre = b;
         i+=1;
     }
+    info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
     let (bits,vec1) = delta_num_bits(&vec);
+    info!("10th vec: {},{},{},{}", vec1[0],vec1[1],vec1[2],vec1[3]);
     (bits,vec1)
 }
 
@@ -274,11 +274,12 @@ pub(crate) fn differential<T: Clone+Copy+Num>(mydata: &[T]) -> Vec<T>{
     vec
 }
 
-pub(crate) fn BP_encoder(mydata: &[u32]) -> Vec<u8>{
-    let num_bits: u8 = num_bits(mydata);
+pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
+    let (num_bits, delta_vec) = delta_num_bits(mydata);
     info!("Number of bits: {}", num_bits);
+    info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
-    for &b in mydata {
+    for &b in delta_vec.as_slice() {
         bitpack_vec.write(b, num_bits as usize).unwrap();
     }
     let vec = bitpack_vec.into_vec();
@@ -289,8 +290,9 @@ pub(crate) fn BP_encoder(mydata: &[u32]) -> Vec<u8>{
 }
 
 pub(crate) fn deltaBP_encoder(mydata: &[i32]) -> Vec<u8>{
-    let (num_bits, delta_vec) = delta_num_bits(mydata);
+    let (num_bits, delta_vec) = diff_num_bits(mydata);
     info!("Number of bits: {}", num_bits);
+    info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
     for &b in delta_vec.as_slice() {
         bitpack_vec.write(b, num_bits as usize).unwrap();

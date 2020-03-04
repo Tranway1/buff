@@ -58,8 +58,8 @@ impl FCMCompress {
     }
 
     fn encode<T> (&self, seg: &mut Segment<T>)
-        where T: Clone + Eq + Hash +Copy + Num + Into<u32>{
-        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
+        where T: Clone + Eq + Hash +Copy + Num + Into<i32>{
+        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, false);
         fcm.delta_compress();
     }
 
@@ -69,7 +69,7 @@ impl FCMCompress {
 }
 
 impl<T> CompressionMethod<T> for FCMCompress
-    where T:Clone+Eq +Hash+Copy+Num+Into<u32>{
+    where T:Clone+Eq +Hash+Copy+Num+Into<i32>{
     fn get_segments(&self) {
         unimplemented!()
     }
@@ -93,6 +93,52 @@ impl<T> CompressionMethod<T> for FCMCompress
     }
 }
 
+#[derive(Clone)]
+pub struct DFCMCompress {
+    chunksize: usize,
+    batchsize: usize
+}
+
+impl DFCMCompress {
+    pub fn new(chunksize: usize, batchsize: usize) -> Self {
+        DFCMCompress { chunksize, batchsize }
+    }
+
+    fn encode<T> (&self, seg: &mut Segment<T>)
+        where T: Clone + Eq + Hash +Copy + Num + Into<i32>{
+        let mut fcm = FCMCompressor::new(seg.get_data().to_vec(), 3, true);
+        fcm.delta_compress();
+    }
+
+    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
+        unimplemented!()
+    }
+}
+
+impl<T> CompressionMethod<T> for DFCMCompress
+    where T:Clone+Eq +Hash+Copy+Num+Into<i32>{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, segs: &mut Vec<Segment<T>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
+        unimplemented!()
+    }
+}
 
 #[derive(Clone)]
 pub struct BPCompress {
@@ -105,7 +151,7 @@ impl BPCompress {
         BPCompress { chunksize, batchsize }
     }
 
-    fn encode (&self, seg: &mut Segment<u32>){
+    fn encode (&self, seg: &mut Segment<i32>){
         let comp = BP_encoder(seg.get_data().as_slice());
     }
 
@@ -116,7 +162,7 @@ impl BPCompress {
     }
 }
 
-impl CompressionMethod<u32> for BPCompress
+impl CompressionMethod<i32> for BPCompress
     {
     fn get_segments(&self) {
         unimplemented!()
@@ -126,7 +172,7 @@ impl CompressionMethod<u32> for BPCompress
         self.batchsize
     }
 
-    fn run_compress(&self, segs: &mut Vec<Segment<u32>>) {
+    fn run_compress(&self, segs: &mut Vec<Segment<i32>>) {
         let start = Instant::now();
         for seg in segs {
             self.encode(seg);
@@ -136,7 +182,7 @@ impl CompressionMethod<u32> for BPCompress
 //        println!("Time elapsed in BP function() is: {:?}", duration);
     }
 
-    fn run_decompress(&self, segs: &mut Vec<Segment<u32>>) {
+    fn run_decompress(&self, segs: &mut Vec<Segment<i32>>) {
         unimplemented!()
     }
 }
@@ -564,8 +610,8 @@ pub fn test_paa_compress_on_file<'a,T>(file:&str)
     println!("{},    {}", 1.0/window as f32, throughput);
 }
 
-pub fn test_paa_compress_on_int_file(file:&str){
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_paa_compress_on_int_file(file:&str,scl:i32){
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -631,8 +677,8 @@ pub fn test_snappy_compress_on_file<'a,T>(file:&str)
     println!(",    {}", throughput);
 }
 
-pub fn test_snappy_compress_on_int_file(file:&str){
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_snappy_compress_on_int_file(file:&str,scl:i32){
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -665,8 +711,8 @@ pub fn test_deflate_compress_on_file<'a,T>(file:&str)
     println!(",    {}", throughput);
 }
 
-pub fn test_deflate_compress_on_int_file(file:&str){
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_deflate_compress_on_int_file(file:&str,scl:i32){
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -701,8 +747,8 @@ pub fn test_gzip_compress_on_file<'a,T>(file:&str)
 
 
 
-pub fn test_gzip_compress_on_int_file(file:&str){
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_gzip_compress_on_int_file(file:&str,scl:i32){
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -737,8 +783,8 @@ pub fn test_zlib_compress_on_file<'a,T>(file:&str)
     println!(",    {}", throughput);
 }
 
-pub fn test_zlib_compress_on_int_file(file:&str) {
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_zlib_compress_on_int_file(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -772,8 +818,8 @@ pub fn test_grilla_compress_on_file<'a,T>(file: &str)
     println!(",    {}", throughput);
 }
 
-pub fn test_grilla_compress_on_int_file(file: &str) {
-    let file_iter = construct_file_iterator_int(file, 1, ',');
+pub fn test_grilla_compress_on_int_file(file: &str, scl:i32) {
+    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
     let file_vec: Vec<u32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -791,9 +837,9 @@ pub fn test_grilla_compress_on_int_file(file: &str) {
 
 
 
-pub fn test_BP_compress_on_int(file:&str) {
-    let file_iter = construct_file_iterator_int(file, 1, ',');
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+pub fn test_BP_compress_on_int(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
 
     //println!("integer vector: {:?}", file_vec);
     info!("integer vector size: {}", file_vec.len());
@@ -808,8 +854,8 @@ pub fn test_BP_compress_on_int(file:&str) {
     println!(",    {}", throughput);
 }
 
-pub fn test_deltaBP_compress_on_int(file:&str) {
-    let file_iter = construct_file_iterator_int_signed(file, 1, ',');
+pub fn test_deltaBP_compress_on_int(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
     let file_vec: Vec<i32> = file_iter.unwrap().collect();
 
     //println!("integer vector: {:?}", file_vec);
@@ -825,9 +871,26 @@ pub fn test_deltaBP_compress_on_int(file:&str) {
     println!(",    {}", throughput);
 }
 
-pub fn test_FCM_compress_on_int(file:&str) {
-    let file_iter = construct_file_iterator_int(file, 1, ',');
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+pub fn test_DFCM_compress_on_int(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
+
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = DFCMCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in DFCM compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*4;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64;
+    println!(",    {}", throughput);
+}
+
+pub fn test_FCM_compress_on_int(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
 
     //println!("integer vector: {:?}", file_vec);
     info!("integer vector size: {}", file_vec.len());
