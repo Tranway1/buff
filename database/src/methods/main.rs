@@ -82,19 +82,19 @@ fn main() {
         "deltabp" => {
             match data_type.as_str() {
                 "i32" => test_deltaBP_compress_on_int(input_file,int_scale),
-                _ => panic!("Data type not supported yet for BP."),
+                _ => panic!("Data type not supported yet for DELTA-BP."),
             }
         },
         "dfcm" => {
             match data_type.as_str() {
                 "i32" => test_DFCM_compress_on_int(input_file,int_scale),
-                _ => panic!("Data type not supported yet for BP."),
+                _ => panic!("Data type not supported yet for DFCM."),
             }
         },
         "fcm" => {
             match data_type.as_str() {
                 "i32" => test_FCM_compress_on_int(input_file,int_scale),
-                _ => panic!("Data type not supported yet for BP."),
+                _ => panic!("Data type not supported yet for FCM."),
             }
         },
         _ => {panic!("Compression not supported yet.")}
