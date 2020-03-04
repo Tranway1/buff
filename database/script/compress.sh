@@ -5,12 +5,13 @@ do
 		do
 			for file in $(ls /mnt/hdd-2T-3/chunwei/TimeSeriesDB/UCRArchive2018/*/*);
 			    do
-			        if [[ $type == "u32" || $type == "i32"]]
-              then
-                for scl in 1 10 100 do
+if [[ $type == "u32" || $type == "i32" ]]
+then
+                for scl in 1 10 100;
+                do
                   cargo run --package time_series_start --bin compress $file $type $comp $scl
                 done
-              else
+else
                 cargo run --package time_series_start --bin compress $file $type $comp
               fi
 			    done

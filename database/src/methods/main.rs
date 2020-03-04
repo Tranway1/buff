@@ -15,7 +15,7 @@ fn main() {
     if data_type.eq("u32")||data_type.eq("i32") {
         int_scale = args[4].parse::<i32>().unwrap();
     }
-    print!("{}, {}, {}, ",input_file, data_type, compression);
+    print!("{}, {}, {}-{}, ",input_file, data_type, compression,int_scale);
     match compression.as_str(){
         "grilla" => {
             match data_type.as_str() {
