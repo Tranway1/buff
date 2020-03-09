@@ -248,7 +248,7 @@ impl GZipCompress {
     // Compress a sample string and print it after transformation.
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
-        let mut e = GzEncoder::new(Vec::new(), Compression::fast());
+        let mut e = GzEncoder::new(Vec::new(), Compression::best());
         let origin_bin =seg.convert_to_bytes().unwrap();
         info!("original size:{}", origin_bin.len());
         e.write_all(origin_bin.as_slice()).unwrap();
@@ -310,7 +310,7 @@ impl DeflateCompress {
     // Compress a sample string and print it after transformation.
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
-        let mut e = DeflateEncoder::new(Vec::new(), Compression::fast());
+        let mut e = DeflateEncoder::new(Vec::new(), Compression::default());
         let origin_bin =seg.convert_to_bytes().unwrap();
         info!("original size:{}", origin_bin.len());
         e.write_all(origin_bin.as_slice()).unwrap();
@@ -372,7 +372,7 @@ impl ZlibCompress {
     // Compress a sample string and print it after transformation.
     fn encode<'a,T>(&self, seg: &mut Segment<T>)
         where T: Serialize + Deserialize<'a>{
-        let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
         let origin_bin =seg.convert_to_bytes().unwrap();
         info!("original size:{}", origin_bin.len());
         e.write_all(origin_bin.as_slice()).unwrap();
@@ -939,7 +939,7 @@ fn test_bit_packing_on_int() {
 
 #[test]
 fn test_zlib_compress() {
-    let mut e = ZlibEncoder::new(Vec::new(), Compression::fast());
+    let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
     e.write_all(b"foo");
     e.write_all(b"bar");
     let compressed_bytes = e.finish();

@@ -17,6 +17,7 @@ fn main() {
     }
     print!("{}, {}, {}-{}, ",input_file, data_type, compression,int_scale);
     match compression.as_str(){
+//        todo: apply to i32 rather than u32
         "grilla" => {
             match data_type.as_str() {
                 "f32" => test_grilla_compress_on_file::<f32>(input_file),
