@@ -22,7 +22,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_grilla_compress_on_file::<f32>(input_file),
                 "f64" => test_grilla_compress_on_file::<f64>(input_file),
-                "u32" => test_grilla_compress_on_int_file(input_file,int_scale),
+                "i32" => test_grilla_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for grilla."),
             }
         },
@@ -30,7 +30,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_zlib_compress_on_file::<f32>(input_file),
                 "f64" => test_zlib_compress_on_file::<f64>(input_file),
-                "u32" => test_zlib_compress_on_int_file(input_file,int_scale),
+                "i32" => test_zlib_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for zlib."),
             }
         },
@@ -38,7 +38,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_paa_compress_on_file::<f32>(input_file),
                 "f64" => test_paa_compress_on_file::<f64>(input_file),
-                "u32" => test_paa_compress_on_int_file(input_file,int_scale),
+                "i32" => test_paa_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for paa."),
             }
         },
@@ -54,7 +54,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_snappy_compress_on_file::<f32>(input_file),
                 "f64" => test_snappy_compress_on_file::<f64>(input_file),
-                "u32" => test_snappy_compress_on_int_file(input_file,int_scale),
+                "i32" => test_snappy_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for snappy."),
             }
         },
@@ -62,7 +62,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_deflate_compress_on_file::<f32>(input_file),
                 "f64" => test_deflate_compress_on_file::<f64>(input_file),
-                "u32" => test_deflate_compress_on_int_file(input_file,int_scale),
+                "i32" => test_deflate_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for deflate."),
             }
         },
@@ -70,7 +70,7 @@ fn main() {
             match data_type.as_str() {
                 "f32" => test_gzip_compress_on_file::<f32>(input_file),
                 "f64" => test_gzip_compress_on_file::<f64>(input_file),
-                "u32" => test_gzip_compress_on_int_file(input_file,int_scale),
+                "i32" => test_gzip_compress_on_int_file(input_file,int_scale),
                 _ => panic!("Data type not supported yet for gzip."),
             }
         },

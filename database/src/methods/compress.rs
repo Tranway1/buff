@@ -611,8 +611,8 @@ pub fn test_paa_compress_on_file<'a,T>(file:&str)
 }
 
 pub fn test_paa_compress_on_int_file(file:&str,scl:i32){
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);;
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = PAACompress::new(10,10);
@@ -678,8 +678,8 @@ pub fn test_snappy_compress_on_file<'a,T>(file:&str)
 }
 
 pub fn test_snappy_compress_on_int_file(file:&str,scl:i32){
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = SnappyCompress::new(10,10);
@@ -712,8 +712,8 @@ pub fn test_deflate_compress_on_file<'a,T>(file:&str)
 }
 
 pub fn test_deflate_compress_on_int_file(file:&str,scl:i32){
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = DeflateCompress::new(10,10);
@@ -748,8 +748,8 @@ pub fn test_gzip_compress_on_file<'a,T>(file:&str)
 
 
 pub fn test_gzip_compress_on_int_file(file:&str,scl:i32){
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = GZipCompress::new(10,10);
@@ -784,8 +784,8 @@ pub fn test_zlib_compress_on_file<'a,T>(file:&str)
 }
 
 pub fn test_zlib_compress_on_int_file(file:&str,scl:i32) {
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = ZlibCompress::new(10,10);
@@ -819,8 +819,8 @@ pub fn test_grilla_compress_on_file<'a,T>(file: &str)
 }
 
 pub fn test_grilla_compress_on_int_file(file: &str, scl:i32) {
-    let file_iter = construct_file_iterator_int(file, 1, ',',scl);
-    let file_vec: Vec<u32> = file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = GorillaCompress::new(10,10);

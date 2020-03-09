@@ -1,7 +1,7 @@
 cd /mnt/hdd-2T-3/chunwei/TimeSeriesDB/database;
 for comp in fcm dfcm grilla zlib paa fourier snappy deflate gzip bp deltabp;
 do
-	for type in i32 f32 f64 u32;
+	for type in i32 f32 f64;
 		do
 			for file in $(ls $1);
 #			for file in $(ls /mnt/hdd-2T-3/chunwei/TimeSeriesDB/UCRArchive2018/*/*);
