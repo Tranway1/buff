@@ -287,6 +287,8 @@ pub(crate) fn delta_offset<T: Clone+Copy+Num+PartialOrd>(mydata: &[T]) -> Vec<T>
             min = b;
         }
     }
+    // todo: avoid using 2
+    // min = min - T::one() - T::one();
     for &b in mydata {
         delta = (b - min);
         vec.push(delta);
