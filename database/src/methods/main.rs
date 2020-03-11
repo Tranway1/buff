@@ -18,12 +18,12 @@ fn main() {
     print!("{}, {}, {}-{}, ",input_file, data_type, compression,int_scale);
     match compression.as_str(){
 //        todo: apply to i32 rather than u32
-        "grilla" => {
+        "gorilla" => {
             match data_type.as_str() {
                 "f32" => test_grilla_compress_on_file::<f32>(input_file),
                 "f64" => test_grilla_compress_on_file::<f64>(input_file),
                 "i32" => test_grilla_compress_on_int_file(input_file,int_scale),
-                _ => panic!("Data type not supported yet for grilla."),
+                _ => panic!("Data type not supported yet for gorilla."),
             }
         },
         "zlib" => {

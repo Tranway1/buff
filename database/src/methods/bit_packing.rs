@@ -2,6 +2,8 @@ use bitpacking::{BitPacker, BitPacker4x};
 use log::{info, trace, warn};
 use futures::future::err;
 use num::Num;
+use std::mem;
+use crate::client::construct_file_iterator_skip_newline;
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
@@ -354,5 +356,52 @@ fn test_moresmallbit() {
     let mut bitpack = BitPack::<&[u8]>::new(bitpack_vec.as_slice());
     for &b in &input[..] {
         assert_eq!(bitpack.read(1).unwrap(), b);
+    }
+}
+
+#[test]
+fn test_xor_f64() {
+    let input= [0f64,1.0,2.0,3.0,4.0,100.0,20000.0,0.0001,0.001,0.01,0.1,1.0,1.1,1.2,1.3,1.31,1.2999999,1.3000000,1.3099999,1.3100001,1.31101,1.31102, 1.31902,1.31111,-1.311,10000.3,10000.31,10000.2999999,10000.3000000,10000.3099999,10000.3100001];
+    let mut pre = 0u64;
+    let mut cur = 0u64;
+    let a = 0u64;
+    let b = 1u64;
+    let x_or = a ^ b;
+    let x = 3.1415f32;
+    let xu = unsafe { mem::transmute::<f32, u32>(x) };
+    println!("{:#066b}",xu);
+    let y = 3.1415f64;
+    let yu = unsafe { mem::transmute::<f64, u64>(y) };
+    println!("{:#066b}",yu);
+    println!("{:#066b}^{:#066b}={:#066b}", a, b, x_or);
+    for &ele in &input{
+        cur = unsafe { mem::transmute::<f64, u64>(ele) };
+        let xor = cur ^ pre;
+        println!("{:#066b}  XOR", xor);
+        println!("{:#066b}  {}", cur,ele);
+        pre = cur;
+
+    }
+}
+
+
+#[test]
+fn test_xor_on_file() {
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
+    let ve: Vec<f64> = file_iter.unwrap().collect();
+    let input = &ve[..20];
+    let mut pre = 0u64;
+    let mut cur = 0u64;
+    let a = 0u64;
+    let b = 1u64;
+    let x_or = a ^ b;
+    println!("{:#066b}^{:#066b}={:#066b}", a, b, x_or);
+    for &ele in input{
+        cur = unsafe { mem::transmute::<f64, u64>(ele) };
+        let xor = cur ^ pre;
+        println!("{:#066b}  XOR", xor);
+        println!("{:#066b}  {}", cur,ele);
+        pre = cur;
+
     }
 }
