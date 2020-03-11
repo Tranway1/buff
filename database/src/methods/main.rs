@@ -1,5 +1,5 @@
 use std::env;
-use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int, test_deltaBP_compress_on_int, test_DFCM_compress_on_int};
+use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int, test_deltaBP_compress_on_int, test_DFCM_compress_on_int, test_offsetgrilla_compress_on_file, test_offsetgrilla_compress_on_int_file};
 use log::{error, info, warn};
 use log4rs;
 
@@ -17,7 +17,14 @@ fn main() {
     }
     print!("{}, {}, {}-{}, ",input_file, data_type, compression,int_scale);
     match compression.as_str(){
-//        todo: apply to i32 rather than u32
+        "ofsgorilla" => {
+            match data_type.as_str() {
+                "f32" => test_offsetgrilla_compress_on_file::<f32>(input_file),
+                "f64" => test_offsetgrilla_compress_on_file::<f64>(input_file),
+                "i32" => test_offsetgrilla_compress_on_int_file(input_file,int_scale),
+                _ => panic!("Data type not supported yet for offset+gorilla."),
+            }
+        },
         "gorilla" => {
             match data_type.as_str() {
                 "f32" => test_grilla_compress_on_file::<f32>(input_file),

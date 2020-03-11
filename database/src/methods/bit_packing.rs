@@ -4,6 +4,7 @@ use futures::future::err;
 use num::Num;
 use std::mem;
 use crate::client::construct_file_iterator_skip_newline;
+use std::fmt::Debug;
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
@@ -272,6 +273,23 @@ pub(crate) fn differential<T: Clone+Copy+Num>(mydata: &[T]) -> Vec<T>{
         vec.push(delta);
         pre = b;
         i += 1;
+    }
+    vec
+}
+
+pub(crate) fn delta_offset<T: Clone+Copy+Num+PartialOrd>(mydata: &[T]) -> Vec<T>{
+    let mut vec = Vec::new();
+    let mut xor:u32 = 0;
+    let mut delta = T::zero();
+    let mut min = T::zero();
+    for &b in mydata {
+        if b<min {
+            min = b;
+        }
+    }
+    for &b in mydata {
+        delta = (b - min);
+        vec.push(delta);
     }
     vec
 }
