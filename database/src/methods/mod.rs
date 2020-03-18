@@ -3,6 +3,7 @@ pub mod deep_learning;
 pub mod int_encoder;
 pub mod bit_packing;
 pub mod fcm_encoder;
+pub mod prec_double;
 use std::fmt;
 use crate::dictionary::{DictionaryId};
 

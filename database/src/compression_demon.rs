@@ -54,8 +54,8 @@ impl<T,U,F> CompressionDemon<T,U,F>
 			Ok(mut buf) => {
 				//println!("Lock aquired");
 				if buf.exceed_threshold(self.uncomp_threshold) && buf.exceed_batch(self.compress_method.get_batch()) {
-					//println!("Get segment for compression");
 					let batch_size = self.compress_method.get_batch();
+					//println!("Get segment for compression batch size:{}",batch_size);
 					let mut segs = Vec::with_capacity(batch_size);
 					loop {
 						match buf.remove_segment(){

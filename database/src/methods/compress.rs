@@ -33,6 +33,7 @@ use rustfft::FFTnum;
 use crate::methods::fcm_encoder::FCMCompressor;
 use std::hash::Hash;
 use std::borrow::Borrow;
+use crate::methods::prec_double::PrecisionBound;
 
 pub trait CompressionMethod<T> {
 
@@ -499,8 +500,13 @@ impl GorillaCompress {
         let mut actual_datapoints = Vec::new();
 
         let mut t =0;
+        let mut bound = PrecisionBound::new(0.000005);
         for val in seg.get_data(){
-            let v = (*val).into();
+            let v = bound.precision_bound((*val).into());
+//            println!("{}=>{}",(*val).into(),v);
+//            let preu =  unsafe { mem::transmute::<f64, u64>((*val).into()) };
+//            let bdu =  unsafe { mem::transmute::<f64, u64>(v) };
+//            println!("{:#066b} => {:#066b}", preu, bdu);
             let dp = DataPoint::new(t, v);
             actual_datapoints.push(dp);
             t+=1;
