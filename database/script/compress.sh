@@ -8,7 +8,7 @@ do
 			    do
 if [[ $type == "u32" || $type == "i32" ]]
 then
-                for scl in 1 10 100;
+                for scl in 1 100  100000;
                 do
                   cargo run --package time_series_start --bin compress $file $type $comp $scl
                 done
