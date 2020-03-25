@@ -1,5 +1,6 @@
 use log::{warn,info};
 use std::mem;
+use crate::methods::bit_packing::BitPack;
 
 pub struct PrecisionBound {
     position: u64,
@@ -59,6 +60,56 @@ impl PrecisionBound {
         pre
     }
 
+    pub fn finer(&self, input:f64) -> Vec<u8>{
+        print!("finer results:");
+        let mut org = input.abs();
+        let mut cur = 0.5f64;
+        let mut pre = 0f64;
+        let mut mid = 0f64;
+        let mut low =0.0;
+        let mut high = 1.0;
+        // check if input between 0 and 1;
+        let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(1);
+        if org == 0.0{
+            bitpack_vec.write(0,1);
+            print!("0");
+            let vec = bitpack_vec.into_vec();
+            return vec;
+        }else if org ==0.5 {
+            bitpack_vec.write(1,1);
+            print!("1");
+            let vec = bitpack_vec.into_vec();
+            return vec;
+        }
+        else if (org<1.0 && org>0.0){
+            mid = (low+high)/2.0;
+            while(!self.is_bounded(org,mid)){
+                if org<mid{
+                    bitpack_vec.write(0,1);
+                    print!("0");
+                    high = mid;
+                }
+                else {
+                    bitpack_vec.write(1,1);
+                    print!("1");
+                    low = mid;
+                }
+                mid = (low+high)/2.0;
+            }
+
+        }
+        if mid == org{
+            bitpack_vec.write(0,1);
+            print!("0");
+        }else {
+            bitpack_vec.write(1,1);
+            print!("1");
+        }
+        let vec = bitpack_vec.into_vec();
+        println!("{:?} after conversion: {:?}", vec, vec);
+        vec
+    }
+
 
     pub fn is_bounded(&self, a:f64, b:f64)-> bool{
         let delta =  a-b;
@@ -71,7 +122,14 @@ impl PrecisionBound {
 
 
 
-
+#[test]
+fn test_precision_bounded_decimal() {
+    let mut bound = PrecisionBound::new(0.000005);
+    let vec = bound.finer(0.2324563);
+    let vec = bound.finer(0.25);
+    let vec = bound.finer(0.125);
+    let vec = bound.finer(0.1239);
+}
 
 
 #[test]

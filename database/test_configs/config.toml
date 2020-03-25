@@ -1,0 +1,206 @@
+# comments in toml
+
+# Necesssary and must be an integer
+segment_size = 1000 # write this line before any [_] are encountered
+					# This ensures that the segment size can be read
+					# This will determine how much memory is allocated
+					# for each data collection of segments
+
+
+
+# Not-Necessary, but if one value is provided then the other
+# must also be set as well
+[runtime]
+core_threads = 8 # Indicates the number of cores to use
+blocking_threads = 100 # Indicates the max number of "futures"
+					   # that can be spawned on the constructed runtime
+
+
+# Currently Necessary, but the code exists to just change
+# mod enabling buffers without file_managers
+[file_handler]
+file_manager = "Rocks" # Necessary parameter used to indicate what fm to use
+	[file_handler.params] # Necessary, used to construct a
+						  # toml table for parameters
+	path = "../rocksdb" # Necessary, used by Rocks to construct the database
+
+
+# Currently Necessary, but the code exists to just change
+# mod enabling file_managers without buffers, or
+# signals just not storing values
+[buffer]
+buffer_size = 100 # Necessary, required to indicate how
+				  # many buffer entires should be created
+type = "Clock" # Necessary, required to indicate what buffer should be used
+
+
+# At least one client must be created, otherwise nothing would happen
+[clients]
+
+	# An instance of a uniform gen client
+#	[clients.client1]
+#	id = 983937 # Not Necessary, the id value of the client, if not set
+#				# then randomly generated
+#
+#	type = "gen" # declare that the client is of type "gen"
+#
+#	gen_type = "uniform" # the distribution to use
+#
+#	amount = 100 # Not Necessary, the number of values to recieve before
+#				 # ending, if not set, then no limit on number of
+#				 # values recieved
+#
+#		[clients.client1.run_period] # Not Necessary, the max time a signal
+#									 # should be alive, if not set, then
+#									 # no limit on how long the client
+#									 # should be alive
+#		sec = 30 # The amount of secs to be alive
+#		nano_sec = 34 # the amount of nano seconds to be alive
+#
+#		[clients.client1.frequency] # Not Necessary, the minimum time a
+#									# a client must wait before producing
+#									# the next value, Also the start time,
+#									# which determines how long the client
+#									# client should wait before producing
+#									# the first value
+#		sec = 30 # the amount of seconds to be wait before
+#				 # producing the next value
+#		nano_sec = 34 # the amount of nano seconds to be wait before
+#					  # producing the next value
+#		start_sec = 30 # the amount of seconds to wait before
+#					   # producing the first value
+#		start_nano_sec = 34 # the amount of nano seconds to wait before
+#							# producing the first value
+#		# note, you do not need to specify all of the values, only specify
+#		# the values you care about
+#
+#		# Necessary, the parameters used to construct the generator client
+#		[clients.client1.params]
+#		low = 50000.0 # Sets the minimum value
+#		high = 2000000.0 # Sets the maximum value
+#
+#	# An instance of normal gen client that will run for a minute
+#	# producing values with out limit and immediately and then end
+
+#    [clients.client9]
+#    	id = 387
+#    	type = "gen"
+#    	gen_type = "normal"
+#
+#    		[clients.client9.run_period]
+#    		sec = 30
+#
+#    		[clients.client9.params]
+#    		mean = 0.0 # Sets the mean
+#    		std = 1.0 # Sets the standard deviation
+#
+#    [clients.client8]
+#    	id = 3817
+#    	type = "gen"
+#    	gen_type = "normal"
+#
+#    		[clients.client8.run_period]
+#    		sec = 30
+#
+#    		[clients.client8.params]
+#    		mean = 0.0 # Sets the mean
+#    		std = 1.0 # Sets the standard deviation
+#
+#    [clients.client7]
+#        	id = 3917
+#        	type = "gen"
+#        	gen_type = "normal"
+#
+#        		[clients.client7.run_period]
+#        		sec = 30
+#
+#        		[clients.client7.params]
+#        		mean = 0.0 # Sets the mean
+#        		std = 1.0 # Sets the standard deviation
+#
+#    [clients.client6]
+#        	id = 3517
+#        	type = "gen"
+#        	gen_type = "normal"
+#
+#        		[clients.client6.run_period]
+#        		sec = 30
+#
+#        		[clients.client6.params]
+#        		mean = 0.0 # Sets the mean
+#        		std = 1.0 # Sets the standard deviation
+#
+#	[clients.client0]
+#    	id = 37
+#    	type = "gen"
+#    	gen_type = "normal"
+#
+#    		[clients.client0.run_period]
+#    		sec = 30
+#
+#    		[clients.client0.params]
+#    		mean = 0.0 # Sets the mean
+#    		std = 1.0 # Sets the standard deviation
+#
+#
+#	[clients.client1]
+#	id = 937
+#	type = "gen"
+#	gen_type = "normal"
+#
+#		[clients.client1.run_period]
+#		sec = 30
+#
+#		[clients.client1.params]
+#		mean = 0.0 # Sets the mean
+#		std = 1.0 # Sets the standard deviation
+
+	[clients.client2]
+	id = 909937
+	type = "gen"
+	gen_type = "normal"
+
+		[clients.client2.run_period]
+		sec = 30
+
+		[clients.client2.params]
+		mean = 0.0 # Sets the mean
+		std = 1.0 # Sets the standard deviation
+
+
+	# An instance of generator client that never ends
+	[clients.client3]
+	id = 3370
+	type = "gen"
+	gen_type = "normal"
+	# Must be set to true if you want to create a client like this
+	# This was done so that a client that never dies is only made
+	# intentionally. If the client has some termination condition
+	# like amount or run period then you do not need to set this value
+        [clients.client3.run_period]
+        		sec = 30
+
+
+		[clients.client3.params]
+		mean = 0.0 # Sets the mean
+		std = 1.0 # Sets the standard deviation
+
+
+	# An instance of file client that uses the UCRArchive files
+	[clients.client4]
+	type = "file" # used to indicate that it should be a file
+		[clients.client4.params]
+		path = "../UCRArchive2018/Trace/Trace_TEST" #path to file
+		dict = "../UCRArchive2018/Kernel//dict.tsv" #path to dictionary fil
+		reader_type = "NewlineAndSkip" # The type of file reader to use
+		delim = "," # The delimiter between each value
+		skip = 1 # How many values to initially skip
+
+	# An instance of file client that contains deseralized values
+	# delimited by something
+#	[clients.client5]
+#	type = "file"
+#		[clients.client5.params]
+#		path = "path"
+#		reader_type = "DeserializeDelim"
+#		delim = ","

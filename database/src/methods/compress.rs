@@ -26,7 +26,7 @@ use std::time::{SystemTime, Instant};
 use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
 use crate::methods::Methods::Fourier;
 use self::bitpacking::BitPacker1x;
-use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits};
+use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder};
 use std::str::FromStr;
 use num::{FromPrimitive, Num};
 use rustfft::FFTnum;
@@ -258,7 +258,7 @@ impl GZipCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        //print!("{}",ratio);
     }
 
     // Uncompresses a Gz Encoded vector of bytes and returns a string or error
@@ -319,7 +319,7 @@ impl DeflateCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        //print!("{}",ratio);
 
     }
 
@@ -381,7 +381,7 @@ impl ZlibCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        //print!("{}",ratio);
     }
 
     // Uncompresses a zl Encoded vector of bytes and returns a string or error
@@ -441,7 +441,7 @@ impl SnappyCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        //print!("{}",ratio);
     }
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error
@@ -520,7 +520,7 @@ impl GorillaCompress {
         let byte_vec = bytes.to_vec();
         info!("compressed size:{}", byte_vec.len());
         let ratio = bytes.len() as f64 /origin as f64;
-        print!("{}",ratio);
+        //print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
         //println!("{}", decode_reader(bytes).unwrap());
@@ -580,6 +580,54 @@ impl<'a, T> CompressionMethod<T> for GorillaCompress
     }
 }
 
+
+#[derive(Clone)]
+pub struct SplitDoubleCompress {
+    chunksize: usize,
+    batchsize: usize,
+    scale: usize
+}
+
+impl SplitDoubleCompress {
+    pub fn new(chunksize: usize, batchsize: usize, scale: usize) -> Self {
+        SplitDoubleCompress { chunksize, batchsize, scale }
+    }
+
+    fn encode (&self, seg: &mut Segment<i32>){
+        let comp = split_double_encoder(seg.get_data().as_slice(),self.scale);
+    }
+
+    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
+    // Here &[u8] implements BufRead
+    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
+        unimplemented!()
+    }
+}
+
+impl CompressionMethod<i32> for SplitDoubleCompress
+{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress(&self, segs: &mut Vec<Segment<i32>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<i32>>) {
+        unimplemented!()
+    }
+}
 
 fn run_snappy() {
     let args: Vec<String> = env::args().collect();
@@ -894,6 +942,23 @@ pub fn test_BP_compress_on_int(file:&str,scl:i32) {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     info!("Time elapsed in BP compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*4;
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
+    println!(",    {}", throughput);
+}
+
+pub fn test_split_compress_on_int(file:&str,scl:i32) {
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
+    let file_vec: Vec<i32> = file_iter.unwrap().collect();
+
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = SplitDoubleCompress::new(10, 10, scl as usize);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in split compress function() is: {:?}", duration);
     let org_size = file_vec.len()*4;
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);

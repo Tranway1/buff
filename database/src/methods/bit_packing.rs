@@ -236,6 +236,38 @@ pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
     (bits,vec)
 }
 
+pub(crate) fn split_num_bits(mydata: &[i32], scl: usize) -> (u8,Vec<u32>,u8,Vec<u32>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
+    let mut intpart = Vec::new();
+    let mut decpart = Vec::new();
+    let mut intxor:u32 = 0;
+    let mut decxor:u32 = 0;
+    let mut delta = 0u32;
+    let mut min = 0i32;
+    let minValue = mydata.iter().min();
+    info!("min value:{}",minValue.unwrap());
+    match minValue {
+        Some(&val) => min = val,
+        None => panic!("empty"),
+    }
+
+    for &b in mydata {
+        delta = (b - min) as u32;
+        let div = delta / scl as u32;
+        let rem = delta % scl as u32;
+        intpart.push(delta);
+        decpart.push(rem);
+        intxor = intxor | div;
+        decxor = decxor | rem;
+    }
+    let intlead = intxor.leading_zeros();
+    let declead = decxor.leading_zeros();
+    let intbits:u8 = (32 -intlead) as u8;
+    let decbits:u8 = (32 -declead) as u8;
+    info!("10th vec: {},{},{},{}", intpart[0],intpart[1],intpart[2],intpart[3]);
+    (intbits,intpart,decbits,decpart)
+}
+
 pub(crate) fn diff_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
     info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec:Vec<i32> = Vec::new();
@@ -303,6 +335,24 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
     for &b in delta_vec.as_slice() {
         bitpack_vec.write(b, num_bits as usize).unwrap();
+    }
+    let vec = bitpack_vec.into_vec();
+    info!("Length of compressed data: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
+    print!("{}",ratio);
+    vec
+}
+
+pub(crate) fn split_double_encoder(mydata: &[i32], scl:usize) -> Vec<u8>{
+    let (int_bits, int_vec,dec_bits,dec_vec) = split_num_bits(mydata,scl);
+    info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
+    info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
+    let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    for &b in int_vec.as_slice() {
+        bitpack_vec.write(b, int_bits as usize).unwrap();
+    }
+    for &d in dec_vec.as_slice() {
+        bitpack_vec.write(d, dec_bits as usize).unwrap();
     }
     let vec = bitpack_vec.into_vec();
     info!("Length of compressed data: {}", vec.len());
