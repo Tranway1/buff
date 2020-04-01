@@ -11,7 +11,6 @@ use crate::methods::compress::CompressionMethod;
 use std::any::Any;
 use crate::buffer_pool::BufErr::BufEmpty;
 
-
 pub struct CompressionDemon<T,U,F> 
 	where T: Copy + Send + Serialize + DeserializeOwned,
 	      U: FileManager<Vec<u8>,DBVector> + Sync + Send,

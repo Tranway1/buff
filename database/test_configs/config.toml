@@ -155,21 +155,21 @@ type = "Clock" # Necessary, required to indicate what buffer should be used
 #		mean = 0.0 # Sets the mean
 #		std = 1.0 # Sets the standard deviation
 
-	[clients.client2]
+	[clients.client1]
 	id = 909937
 	type = "gen"
 	gen_type = "normal"
 
-		[clients.client2.run_period]
+		[clients.client1.run_period]
 		sec = 30
 
-		[clients.client2.params]
+		[clients.client1.params]
 		mean = 0.0 # Sets the mean
 		std = 1.0 # Sets the standard deviation
 
 
 	# An instance of generator client that never ends
-	[clients.client3]
+	[clients.client2]
 	id = 3370
 	type = "gen"
 	gen_type = "normal"
@@ -177,19 +177,19 @@ type = "Clock" # Necessary, required to indicate what buffer should be used
 	# This was done so that a client that never dies is only made
 	# intentionally. If the client has some termination condition
 	# like amount or run period then you do not need to set this value
-        [clients.client3.run_period]
+        [clients.client2.run_period]
         		sec = 30
 
 
-		[clients.client3.params]
+		[clients.client2.params]
 		mean = 0.0 # Sets the mean
 		std = 1.0 # Sets the standard deviation
 
 
 	# An instance of file client that uses the UCRArchive files
-	[clients.client4]
+	[clients.client0]
 	type = "file" # used to indicate that it should be a file
-		[clients.client4.params]
+		[clients.client0.params]
 		path = "../UCRArchive2018/Trace/Trace_TEST" #path to file
 		dict = "../UCRArchive2018/Kernel//dict.tsv" #path to dictionary fil
 		reader_type = "NewlineAndSkip" # The type of file reader to use
