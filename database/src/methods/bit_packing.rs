@@ -338,15 +338,15 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     }
     let vec = bitpack_vec.into_vec();
     info!("Length of compressed data: {}", vec.len());
-    let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
+    let ratio= vec.len() as f32 / (mydata.len() as f32*8.0);
     print!("{}",ratio);
     vec
 }
 
 pub(crate) fn split_double_encoder(mydata: &[i32], scl:usize) -> Vec<u8>{
     let (int_bits, int_vec,dec_bits,dec_vec) = split_num_bits(mydata,scl);
-    info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
-    info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
+    //info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
+    //info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
     for &b in int_vec.as_slice() {
         bitpack_vec.write(b, int_bits as usize).unwrap();
@@ -355,8 +355,8 @@ pub(crate) fn split_double_encoder(mydata: &[i32], scl:usize) -> Vec<u8>{
         bitpack_vec.write(d, dec_bits as usize).unwrap();
     }
     let vec = bitpack_vec.into_vec();
-    info!("Length of compressed data: {}", vec.len());
-    let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
+    info!("compressed size: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*8.0);
     print!("{}",ratio);
     vec
 }
