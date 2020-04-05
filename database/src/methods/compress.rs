@@ -258,7 +258,7 @@ impl GZipCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        //print!("{}",ratio);
+        print!("{}",ratio);
     }
 
     // Uncompresses a Gz Encoded vector of bytes and returns a string or error
@@ -319,7 +319,7 @@ impl DeflateCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        //print!("{}",ratio);
+        print!("{}",ratio);
 
     }
 
@@ -381,7 +381,7 @@ impl ZlibCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        //print!("{}",ratio);
+        print!("{}",ratio);
     }
 
     // Uncompresses a zl Encoded vector of bytes and returns a string or error
@@ -441,7 +441,7 @@ impl SnappyCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        //print!("{}",ratio);
+        print!("{}",ratio);
     }
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error

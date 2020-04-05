@@ -5,7 +5,7 @@ for comp in gorilla bp zlib snappy deflate gzip deltabp;
 do
 	for type in i32 f64;
 		do
-			for file in $(ls /mnt/hdd-2T-3/chunwei/timeseries_dataset/*/*/*);
+			for file in /mnt/hdd-2T-3/chunwei/UCI-all.csv /mnt/hdd-2T-3/chunwei/UCR-all.csv ;
 			    do
 if [[ $type == "u32" || $type == "i32" ]]
 then
