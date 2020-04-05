@@ -518,8 +518,8 @@ impl GorillaCompress {
         }
         let bytes = encoder.close();
         let byte_vec = bytes.to_vec();
-        info!("compressed size:{}", byte_vec.len()- t as usize);
-        let ratio = (byte_vec.len()- t as usize) as f64 /origin as f64;
+        info!("compressed size:{}", byte_vec.len()- (t / 8 as usize) as usize);
+        let ratio = (byte_vec.len()- (t / 8 as usize) as usize) as f64 /origin as f64;
         print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
@@ -621,8 +621,8 @@ impl GorillaBDCompress {
         }
         let bytes = encoder.close();
         let byte_vec = bytes.to_vec();
-        info!("compressed size:{}", byte_vec.len()-t as usize);
-        let ratio = (byte_vec.len()- t as usize) as f64 /origin as f64;
+        info!("compressed size:{}", byte_vec.len()- (t / 8 as usize) as usize);
+        let ratio = (byte_vec.len()- (t / 8 as usize) as usize) as f64 /origin as f64;
         print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
