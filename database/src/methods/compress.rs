@@ -34,6 +34,8 @@ use crate::methods::fcm_encoder::FCMCompressor;
 use std::hash::Hash;
 use std::borrow::Borrow;
 use crate::methods::prec_double::PrecisionBound;
+use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
+use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 
 pub trait CompressionMethod<T> {
 
@@ -495,10 +497,7 @@ impl GorillaCompress {
         let w = BufferedWriter::new();
 
         // 1482892260 is the Unix timestamp of the start of the stream
-        let mut encoder = StdEncoder::new(0, w);
-
-        let mut actual_datapoints = Vec::new();
-
+        let mut encoder = GorillaEncoder::new(0, w);
         let mut t =0;
         let mut bound = PrecisionBound::new(0.000005);
         for val in seg.get_data(){
@@ -507,19 +506,15 @@ impl GorillaCompress {
 //            let preu =  unsafe { mem::transmute::<f64, u64>((*val).into()) };
 //            let bdu =  unsafe { mem::transmute::<f64, u64>(v) };
 //            println!("{:#066b} => {:#066b}", preu, bdu);
-            let dp = DataPoint::new(t, (*val).into());
-            actual_datapoints.push(dp);
+            encoder.encode_float((*val).into());
             t+=1;
         }
         let origin = t * ((mem::size_of::<T>()) as u64);
         info!("original size:{}", origin);
-        for dp in &actual_datapoints {
-            encoder.encode(*dp);
-        }
         let bytes = encoder.close();
         let byte_vec = bytes.to_vec();
-        info!("compressed size:{}", byte_vec.len()- (t / 8) as usize);
-        let ratio = (byte_vec.len()- (t / 8) as usize) as f64 /origin as f64;
+        info!("compressed size:{}", byte_vec.len());
+        let ratio = (byte_vec.len() as usize) as f64 /origin as f64;
         print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
@@ -528,11 +523,11 @@ impl GorillaCompress {
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error
     // Here &[u8] implements BufRead
-    fn decode(&self, bytes: Vec<u8>) -> Vec<DataPoint> {
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64> {
         let r = BufferedReader::new(bytes.into_boxed_slice());
-        let mut decoder = StdDecoder::new(r);
+        let mut decoder = GorillaDecoder::new(r);
 
-        let mut expected_datapoints:Vec<DataPoint> = Vec::new();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
         loop {
@@ -540,7 +535,7 @@ impl GorillaCompress {
                 break;
             }
 
-            match decoder.next() {
+            match decoder.next_val() {
                 Ok(dp) => expected_datapoints.push(dp),
                 Err(err) => {
                     if err == Error::EndOfStream {
@@ -598,9 +593,9 @@ impl GorillaBDCompress {
         let w = BufferedWriter::new();
 
         // 1482892260 is the Unix timestamp of the start of the stream
-        let mut encoder = StdEncoder::new(0, w);
+        let mut encoder = GorillaEncoder::new(0, w);
 
-        let mut actual_datapoints = Vec::new();
+        let mut actual_datapoints:Vec<f64> = Vec::new();
 
         let mut t =0;
         let mut bound = PrecisionBound::new(0.000005);
@@ -610,19 +605,15 @@ impl GorillaBDCompress {
 //            let preu =  unsafe { mem::transmute::<f64, u64>((*val).into()) };
 //            let bdu =  unsafe { mem::transmute::<f64, u64>(v) };
 //            println!("{:#066b} => {:#066b}", preu, bdu);
-            let dp = DataPoint::new(t, v);
-            actual_datapoints.push(dp);
+            encoder.encode_float(v);
             t+=1;
         }
         let origin = t * ((mem::size_of::<T>()) as u64);
         info!("original size:{}", origin);
-        for dp in &actual_datapoints {
-            encoder.encode(*dp);
-        }
         let bytes = encoder.close();
         let byte_vec = bytes.to_vec();
-        info!("compressed size:{}", byte_vec.len()- (t / 8)as usize);
-        let ratio = (byte_vec.len()- (t / 8) as usize) as f64 /origin as f64;
+        info!("compressed size:{}", byte_vec.len() as usize);
+        let ratio = (byte_vec.len() as usize) as f64 /origin as f64;
         print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
@@ -631,11 +622,11 @@ impl GorillaBDCompress {
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error
     // Here &[u8] implements BufRead
-    fn decode(&self, bytes: Vec<u8>) -> Vec<DataPoint> {
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64> {
         let r = BufferedReader::new(bytes.into_boxed_slice());
-        let mut decoder = StdDecoder::new(r);
+        let mut decoder = GorillaDecoder::new(r);
 
-        let mut expected_datapoints:Vec<DataPoint> = Vec::new();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
         loop {
@@ -643,7 +634,7 @@ impl GorillaBDCompress {
                 break;
             }
 
-            match decoder.next() {
+            match decoder.next_val() {
                 Ok(dp) => expected_datapoints.push(dp),
                 Err(err) => {
                     if err == Error::EndOfStream {
@@ -1060,7 +1051,7 @@ pub fn test_splitbd_compress_on_file<'a,T>(file: &str)
     let comp = SplitBDDoubleCompress::new(10,10);
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    info!("Time elapsed in grilla compress function() is: {:?}", duration);
+    info!("Time elapsed in splitbd compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len() * mem::size_of::<T>();
@@ -1084,7 +1075,7 @@ pub fn test_grillabd_compress_on_file<'a,T>(file: &str)
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len() * mem::size_of::<T>();
 //    println!("record size: {}", mem::size_of::<T>() + 8);
-    let org_size = file_vec.len() * (mem::size_of::<T>() + 8);
+    let org_size = file_vec.len() * (mem::size_of::<T>());
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1103,7 +1094,7 @@ pub fn test_grilla_compress_on_file<'a,T>(file: &str)
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len() * mem::size_of::<T>();
 //    println!("record size: {}", mem::size_of::<T>() + 8);
-    let org_size = file_vec.len() * (mem::size_of::<T>() + 8);
+    let org_size = file_vec.len() * (mem::size_of::<T>());
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1119,7 +1110,7 @@ pub fn test_grilla_compress_on_int_file(file: &str, scl:i32) {
     info!("Time elapsed in grilla compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
 //    let org_size = file_vec.len()*4;
-    let org_size = file_vec.len() * (mem::size_of::<i32>() + 8);;
+    let org_size = file_vec.len() * (mem::size_of::<i32>());;
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1141,7 +1132,7 @@ pub fn test_offsetgrilla_compress_on_file<'a,T>(file: &str)
     //println!("expected datapoints: {:?}", decompress);
 //    let org_size = file_vec.len() * mem::size_of::<T>();
 //    println!("record size: {}", mem::size_of::<T>() + 8);
-    let org_size = file_vec.len() * (mem::size_of::<T>() + 8);
+    let org_size = file_vec.len() * (mem::size_of::<T>());
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1158,7 +1149,7 @@ pub fn test_offsetgrilla_compress_on_int_file(file: &str, scl:i32) {
     info!("Time elapsed in grilla compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
 //    let org_size = file_vec.len()*4;
-    let org_size = file_vec.len() * (mem::size_of::<i32>() + 8);;
+    let org_size = file_vec.len() * (mem::size_of::<i32>());;
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1312,6 +1303,12 @@ fn test_Grilla_seg_compress() {
 #[test]
 fn test_Grilla_compress() {
     const DATA: &'static str = "1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
 1482892280,7.78
 1482892288,7.95
 1482892292,5.53
@@ -1360,6 +1357,74 @@ fn test_Grilla_compress() {
         }
 
         match decoder.next() {
+            Ok(dp) => expected_datapoints.push(dp),
+            Err(err) => {
+                if err == Error::EndOfStream {
+                    done = true;
+                } else {
+                    panic!("Received an error from decoder: {:?}", err);
+                }
+            }
+        };
+    }
+
+    println!("actual datapoints: {:?}", actual_datapoints);
+    println!("expected datapoints: {:?}", expected_datapoints);
+}
+
+#[test]
+fn test_My_Grilla_compress() {
+    const DATA: &'static str = "1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892270,1.76
+1482892280,7.78
+1482892288,7.95
+1482892292,5.53
+1482892310,4.41
+1482892323,5.30
+1482892334,5.30
+1482892341,2.92
+1482892350,0.73
+1482892360,-1.33
+1482892370,-1.78
+1482892390,-12.45
+1482892401,-34.76
+1482892490,78.9
+1482892500,335.67
+1482892800,12908.12
+";
+    let w = BufferedWriter::new();
+
+    // 1482892260 is the Unix timestamp of the start of the stream
+    let mut encoder = GorillaEncoder::new(1482892260, w);
+
+    let mut actual_datapoints = Vec::new();
+
+    for line in DATA.lines() {
+        let substrings: Vec<&str> = line.split(",").collect();
+        let t = substrings[0].parse::<u64>().unwrap();
+        let v = substrings[1].parse::<f64>().unwrap();
+        encoder.encode_float(v);
+        actual_datapoints.push(v);
+    }
+
+    let bytes = encoder.close();
+    let r = BufferedReader::new(bytes);
+    let mut decoder = GorillaDecoder::new(r);
+
+    let mut expected_datapoints = Vec::new();
+
+    let mut done = false;
+    loop {
+        if done {
+            break;
+        }
+
+        match decoder.next_val() {
             Ok(dp) => expected_datapoints.push(dp),
             Err(err) => {
                 if err == Error::EndOfStream {

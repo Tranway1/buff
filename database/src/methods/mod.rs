@@ -1,6 +1,7 @@
 pub mod compress;
 pub mod deep_learning;
-pub mod int_encoder;
+pub mod gorilla_encoder;
+pub mod gorilla_decoder;
 pub mod bit_packing;
 pub mod fcm_encoder;
 pub mod prec_double;

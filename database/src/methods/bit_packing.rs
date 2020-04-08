@@ -338,7 +338,7 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     }
     let vec = bitpack_vec.into_vec();
     info!("Length of compressed data: {}", vec.len());
-    let ratio= vec.len() as f32 / (mydata.len() as f32*8.0);
+    let ratio= vec.len() as f32 / (mydata.len() as f32*4.0);
     print!("{}",ratio);
     vec
 }
