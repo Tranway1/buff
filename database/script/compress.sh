@@ -1,7 +1,7 @@
 cd /mnt/hdd-2T-3/chunwei/TimeSeriesDB/database;
 #dir=$1
 #for comp in ofsgorilla gorilla gorillabd splitbd split bp zlib paa fourier snappy deflate gzip deltabp;
-for comp in gorilla bp zlib snappy deflate gzip deltabp fcm dfcm;
+for comp in gorilla gorillabd;
 do
 	for type in i32 f64;
 		do

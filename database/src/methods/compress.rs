@@ -526,7 +526,7 @@ impl GorillaCompress {
         let byte_vec = bytes.to_vec();
         info!("compressed size:{}", byte_vec.len());
         let ratio = (byte_vec.len() as usize) as f64 /origin as f64;
-//        print!("{}",ratio);
+        print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
         //println!("{}", decode_reader(bytes).unwrap());
