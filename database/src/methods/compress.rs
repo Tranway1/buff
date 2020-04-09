@@ -36,6 +36,7 @@ use std::borrow::Borrow;
 use crate::methods::prec_double::PrecisionBound;
 use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
 use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
+use std::any::Any;
 
 pub trait CompressionMethod<T> {
 
@@ -154,14 +155,24 @@ impl BPCompress {
         BPCompress { chunksize, batchsize }
     }
 
-    fn encode (&self, seg: &mut Segment<i32>){
+    fn encode (&self, seg: &mut Segment<i32>) -> Vec<u8>{
         let comp = BP_encoder(seg.get_data().as_slice());
+        comp
     }
 
-    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
-    // Here &[u8] implements BufRead
-    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
-            unimplemented!()
+    fn decode(&self, bytes: Vec<u8>) {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        println!("bit packing length:{}",ilen);
+        let mut cur;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            if i<10{
+                println!("{}th value: {}",i,cur);
+            }
+        }
     }
 }
 
@@ -515,7 +526,7 @@ impl GorillaCompress {
         let byte_vec = bytes.to_vec();
         info!("compressed size:{}", byte_vec.len());
         let ratio = (byte_vec.len() as usize) as f64 /origin as f64;
-        print!("{}",ratio);
+//        print!("{}",ratio);
         byte_vec
         //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
         //println!("{}", decode_reader(bytes).unwrap());
@@ -530,13 +541,19 @@ impl GorillaCompress {
         let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
+        let mut i=0;
         loop {
             if done {
                 break;
             }
 
             match decoder.next_val() {
-                Ok(dp) => expected_datapoints.push(dp),
+                Ok(dp) => {
+                    if i<10 {
+                        println!("{}",dp);
+                    }
+                    i+=1;
+                    expected_datapoints.push(dp)},
                 Err(err) => {
                     if err == Error::EndOfStream {
                         done = true;
@@ -767,8 +784,11 @@ impl SplitBDDoubleCompress {
         }
         let ilen = int_len as usize;
         let dlen = dec_len as usize;
-//        println!("int_len:{},dec_len:{}",int_len,dec_len);
+        info!("int_len:{},dec_len:{}",int_len,dec_len);
         let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+        bitpack_vec.write(t, 32);
+        bitpack_vec.write(ilen as u32, 32);
+        bitpack_vec.write(dlen as u32, 32);
         for b in int_vec {
             bitpack_vec.write(b as u32, ilen).unwrap();
         }
@@ -777,7 +797,7 @@ impl SplitBDDoubleCompress {
         }
         let vec = bitpack_vec.into_vec();
 
-        let origin = t * ((mem::size_of::<T>()) as u64);
+        let origin = t * mem::size_of::<T>() as u32;
         info!("original size:{}", origin);
         info!("compressed size:{}", vec.len());
         let ratio = vec.len() as f64 /origin as f64;
@@ -787,10 +807,22 @@ impl SplitBDDoubleCompress {
         //println!("{}", decode_reader(bytes).unwrap());
     }
 
-    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
-    // Here &[u8] implements BufRead
-    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
-        unimplemented!()
+
+    fn decode(&self, bytes: Vec<u8>) {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut cur;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            if i<10{
+                println!("{}th value: {}",i,cur);
+            }
+        }
+
     }
 }
 
@@ -817,23 +849,6 @@ impl<'a, T> CompressionMethod<T> for SplitBDDoubleCompress
         unimplemented!()
     }
 }
-
-fn run_snappy() {
-    let args: Vec<String> = env::args().collect();
-    println!("Arguments: {:?}", args);
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
-    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let start = Instant::now();
-    let comp = SnappyCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
-    let duration = start.elapsed();
-    println!("Time elapsed in Snappy compress function() is: {:?}", duration);
-}
-
-
-
-
 
 pub fn test_paa_compress_on_file<'a,T>(file:&str)
     where T: FromStr + Clone + Copy + FromPrimitive+Num{
@@ -1438,4 +1453,53 @@ fn test_My_Grilla_compress() {
 
     println!("actual datapoints: {:?}", actual_datapoints);
     println!("expected datapoints: {:?}", expected_datapoints);
+}
+
+
+
+#[test]
+fn run_bp_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+    let file_iter = construct_file_iterator_int_signed("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',',100000);
+    let file_vec: Vec<i32>= file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = BPCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+}
+
+#[test]
+fn run_split_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+//    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/ECGFiveDays/ECGFiveDays_TEST", 1, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = SplitBDDoubleCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+}
+
+
+#[test]
+fn run_gorilla_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = GorillaCompress::new(10,10);
+    let compressed = comp.encode(&mut seg);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }

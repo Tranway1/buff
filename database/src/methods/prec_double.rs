@@ -10,6 +10,7 @@ pub const FIRST_ONE: u64 = 0b100000000000000000000000000000000000000000000000000
 pub struct PrecisionBound {
     position: u64,
     precision: f64,
+    precision_exp : i32,
     int_length: u64,
     decimal_length: u64
 }
@@ -17,7 +18,10 @@ pub struct PrecisionBound {
 
 impl PrecisionBound {
     pub fn new(precision:f64) -> Self {
-        PrecisionBound { position: 0, precision: precision, int_length: 0, decimal_length: 0 }
+        let mut e = PrecisionBound { position: 0, precision: precision, precision_exp : 0, int_length: 0, decimal_length: 0 };
+        let xu = unsafe { mem::transmute::<f64, u64>(precision) };
+        e.precision_exp = ((xu & EXP_MASK) >> 52) as i32 - 1023 as i32;
+        e
     }
 
     pub fn precision_bound(&mut self, orig: f64)-> f64{
@@ -78,6 +82,9 @@ impl PrecisionBound {
         if 52<=trailing_zeros {
             if exp<0{
                 dec_length = (-exp) as u64;
+                if exp<self.precision_exp{
+                    dec_length =0;
+                }
             }
 
         }
@@ -97,6 +104,7 @@ impl PrecisionBound {
                 self.decimal_length = (dec_length+1) as u64
             }
         }
+//    println!("int len :{}, dec len:{}",self.int_length,self.decimal_length );
     }
 
     pub fn get_length(& self) -> (u64,u64){
@@ -111,8 +119,11 @@ impl PrecisionBound {
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
             int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64
+        }else if exp<self.precision_exp{
+            dec_part=0u64;
         }else{
-            dec_part = (((bdu << (12) as u64) >>1) | FIRST_ONE) >> (-exp-1) as u64;
+
+            dec_part = (((bdu << (12)) >>1) | FIRST_ONE) >> ((-exp - 1) as u64);
         }
         (int_part,dec_part >> 64u64-self.decimal_length)
     }

@@ -333,6 +333,8 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     info!("Number of bits: {}", num_bits);
     info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    bitpack_vec.write(delta_vec.len() as u32, 32);
+    bitpack_vec.write(num_bits as u32, 8);
     for &b in delta_vec.as_slice() {
         bitpack_vec.write(b, num_bits as usize).unwrap();
     }
