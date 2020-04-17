@@ -5,6 +5,7 @@ use num::Num;
 use std::mem;
 use crate::client::construct_file_iterator_skip_newline;
 use std::fmt::Debug;
+use serde::{Serialize, Deserialize};
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
@@ -345,7 +346,28 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     vec
 }
 
-pub(crate) fn split_double_encoder(mydata: &[i32], scl:usize) -> Vec<u8>{
+
+pub(crate) fn split_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
+    where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+    let ldata: Vec<i32> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i32).collect::<Vec<i32>>();
+    let (int_bits, int_vec,dec_bits,dec_vec) = split_num_bits(ldata.as_slice(),scl);
+    //info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
+    //info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
+    let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    for &b in int_vec.as_slice() {
+        bitpack_vec.write(b, int_bits as usize).unwrap();
+    }
+    for &d in dec_vec.as_slice() {
+        bitpack_vec.write(d, dec_bits as usize).unwrap();
+    }
+    let vec = bitpack_vec.into_vec();
+    info!("compressed size: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*mem::size_of::<T>() as f32);
+    print!("{}",ratio);
+    vec
+}
+
+pub(crate) fn split_int_encoder(mydata: &[i32], scl:usize) -> Vec<u8>{
     let (int_bits, int_vec,dec_bits,dec_vec) = split_num_bits(mydata,scl);
     //info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
     //info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);

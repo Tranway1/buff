@@ -1,5 +1,5 @@
 use std::env;
-use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int, test_deltaBP_compress_on_int, test_DFCM_compress_on_int, test_offsetgrilla_compress_on_file, test_offsetgrilla_compress_on_int_file, test_split_compress_on_int, test_splitbd_compress_on_file, test_grillabd_compress_on_file};
+use time_series_start::methods::compress::{test_grilla_compress_on_file, test_grilla_compress_on_int_file, test_zlib_compress_on_file, test_zlib_compress_on_int_file, test_BP_compress_on_int, test_paa_compress_on_file, test_paa_compress_on_int_file, test_fourier_compress_on_file, test_snappy_compress_on_file, test_snappy_compress_on_int_file, test_deflate_compress_on_file, test_deflate_compress_on_int_file, test_gzip_compress_on_file, test_gzip_compress_on_int_file, test_FCM_compress_on_int, test_deltaBP_compress_on_int, test_DFCM_compress_on_int, test_offsetgrilla_compress_on_file, test_offsetgrilla_compress_on_int_file, test_split_compress_on_int, test_splitbd_compress_on_file, test_grillabd_compress_on_file, test_split_compress_on_file};
 use log::{error, info, warn};
 use log4rs;
 
@@ -106,6 +106,8 @@ fn main() {
         "split" => {
             match data_type.as_str() {
                 "i32" => test_split_compress_on_int(input_file,int_scale),
+                "f32" => test_split_compress_on_file::<f32>(input_file,int_scale),
+                "f64" => test_split_compress_on_file::<f64>(input_file,int_scale),
                 _ => panic!("Data type not supported yet for BP."),
             }
         },
