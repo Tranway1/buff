@@ -148,6 +148,29 @@ impl<'a> BitPack<&'a [u8]> {
         }
         Ok(output)
     }
+
+
+    pub fn skip(&mut self, mut bits: usize) -> Result<(), usize> {
+        if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
+            return Err(bits);
+        };
+        // println!("current cursor{}, current bits:{}",self.cursor,self.bits);
+        // println!("try to skip {} bits",bits);
+        let byte_left = BYTE_BITS - self.bits;
+        if (bits<=byte_left){
+            self.bits += bits;
+        }
+        else {
+            self.cursor += 1;
+            let remains = (bits-byte_left);
+            let bytes = remains/BYTE_BITS;
+            let left = remains%BYTE_BITS;
+            self.cursor += bytes;
+            self.bits = left;
+        }
+        // println!("current cursor{}, current bits:{}",self.cursor,self.bits);
+        Ok(())
+    }
 }
 
 impl Default for BitPack<Vec<u8>> {

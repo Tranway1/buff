@@ -8,6 +8,7 @@ use log::{info, trace, warn};
 extern crate bitpacking;
 use bitpacking::{BitPacker4x, BitPacker};
 use std::vec::Vec;
+use croaring::Bitmap;
 use tsz::{DataPoint, Encode, Decode, StdEncoder, StdDecoder};
 use tsz::stream::{BufferedReader, BufferedWriter};
 use tsz::decode::Error;
@@ -802,8 +803,13 @@ impl SplitBDDoubleCompress {
         bitpack_vec.write(t, 32);
         bitpack_vec.write(ilen as u32, 32);
         bitpack_vec.write(dlen as u32, 32);
+        let mut i= 0;
         for bd in bd_vec{
             let (int_part, dec_part) = bound.fetch_components(bd);
+            if i<10{
+                println!("{}th, int: {}, decimal: {}",i,int_part,dec_part);
+            }
+            i += 1;
             bitpack_vec.write(int_part as u32, ilen).unwrap();
             dec_vec.push(dec_part);
         }
@@ -882,14 +888,60 @@ impl SplitBDDoubleCompress {
         let ilen = bitpack.read(32).unwrap();
         println!("bit packing length:{}",ilen);
         let dlen = bitpack.read(32).unwrap();
+        // check integer part and update bitmap;
         let mut cur;
-        let mut isqualify = true;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
             if i<10{
                 println!("{}th value: {}",i,cur);
             }
-            isqualify= cur<1;
+            if cur<1{
+                res.add(i);
+            }
+            else if cur == 1 {
+                rb1.add(i);
+            };
+        }
+        rb1.run_optimize();
+        res.run_optimize();
+        let mut iterator = rb1.iter();
+        // check the decimal part
+        let mut it = iterator.next();
+        let mut dec_cur = 0;
+        let mut dec_pre:u32 = 0;
+        let mut dec = 0;
+        let mut delta = 0;
+        if it!=None{
+            dec_cur = it.unwrap();
+            if dec_cur!=0{
+                bitpack.skip(((dec_cur) * dlen) as usize);
+            }
+            dec = bitpack.read(dlen as usize).unwrap();
+            if dec<50{
+                res.add(dec_cur);
+            }
+            println!("index qualified {}, decimal:{}",dec_cur,dec);
+            it = iterator.next();
+            dec_pre = dec_cur;
+        }
+        while it!=None{
+            dec_cur = it.unwrap();
+            //println!("index qualified {}",dec_cur);
+            delta = dec_cur-dec_pre;
+            if delta != 1 {
+                bitpack.skip(((delta-1) * dlen) as usize);
+            }
+            dec = bitpack.read(dlen as usize).unwrap();
+            if dec_cur<10{
+                println!("index qualified {}, decimal:{}",dec_cur,dec);
+            }
+            if dec<50{
+                res.add(dec_cur);
+            }
+            it = iterator.next();
+            dec_pre=dec_cur;
         }
 
     }
@@ -1566,19 +1618,19 @@ fn run_bp_encoding_decoding() {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    test_BP_compress_on_int("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k",100000);
+    // test_BP_compress_on_int("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k",100000);
     //
-    // let start = Instant::now();
-    // comp.decode(compressed);
-    // let duration = start.elapsed();
-    // println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 
 #[test]
 fn run_splitbd_encoding_decoding() {
     let args: Vec<String> = env::args().collect();
     println!("Arguments: {:?}", args);
-    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-10k", 1, ',');
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
 //    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/ECGFiveDays/ECGFiveDays_TEST", 1, ',');
     let file_vec: Vec<f64> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
@@ -1587,11 +1639,11 @@ fn run_splitbd_encoding_decoding() {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    test_splitbd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
-    //let start = Instant::now();
-    // comp.decode(compressed);
-    //let duration = start.elapsed();
-    // println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    // test_splitbd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 
 
@@ -1607,11 +1659,11 @@ fn run_gorillabd_encoding_decoding() {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    test_grillabd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
-    // let start = Instant::now();
-    // comp.decode(compressed);
-    // let duration = start.elapsed();
-    // println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    // test_grillabd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 
 #[test]
@@ -1626,10 +1678,10 @@ fn run_gorilla_encoding_decoding() {
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    test_grilla_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
-    // let start = Instant::now();
-    // comp.decode(compressed);
-    // let duration = start.elapsed();
-    // println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    // test_grilla_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 

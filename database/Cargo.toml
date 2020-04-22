@@ -39,3 +39,5 @@ parity-snappy = ""
 ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
 tsz = "0.1.0"
 bitpacking = "0.8.2"
+lazy_static = "1.4.0"
+croaring = "0.4.4"

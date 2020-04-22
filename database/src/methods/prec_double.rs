@@ -4,10 +4,34 @@ use crate::methods::bit_packing::BitPack;
 use crate::client::construct_file_iterator_skip_newline;
 use std::time::{SystemTime, Instant};
 use crate::segment::Segment;
+use std::fs::File;
+use std::io::{LineWriter, Write};
+use std::collections::HashMap;
+use croaring::Bitmap;
 
 /// END_MARKER is a special bit sequence used to indicate the end of the stream
 pub const EXP_MASK: u64 = 0b0111111111110000000000000000000000000000000000000000000000000000;
 pub const FIRST_ONE: u64 = 0b1000000000000000000000000000000000000000000000000000000000000000;
+
+lazy_static! {
+    static ref PRECISION_MAP : HashMap<i32, i32> =[(1, 5),
+        (2, 8),
+        (3, 11),
+        (4, 15),
+        (5, 18),
+        (6, 21),
+        (7, 25),
+        (8, 28),
+        (9, 31),
+        (10, 35),
+        (11, 38),
+        (12, 50),
+        (13, 10),
+        (14, 10),
+        (15, 10)]
+        .iter().cloned().collect();
+}
+
 
 
 pub struct PrecisionBound {
@@ -79,8 +103,8 @@ impl PrecisionBound {
         let xu = unsafe { mem::transmute::<f64, u64>(x) };
         let trailing_zeros = xu.trailing_zeros();
         let exp = ((xu & EXP_MASK) >> 52) as i32 - 1023 as i32;
-//        println!("trailing_zeros:{}",trailing_zeros);
-//        println!("exp:{}",exp);
+       // println!("trailing_zeros:{}",trailing_zeros);
+       // println!("exp:{}",exp);
         let mut dec_length = 0;
         if 52<=trailing_zeros {
             if exp<0{
@@ -105,7 +129,7 @@ impl PrecisionBound {
             // let xu =  unsafe { mem::transmute::<f64, u64>(x)};
             // println!("{} with dec_length:{}, bounded => {:#066b}",x, dec_length, xu);
         }
-//    println!("int len :{}, dec len:{}",self.int_length,self.decimal_length );
+   // println!("int len :{}, dec len:{}",self.int_length,self.decimal_length );
     }
 
     pub fn get_length(& self) -> (u64,u64){
@@ -382,26 +406,80 @@ fn test_getlength4decimal() {
     let mut cur = 0f64;
     let err = 0.00000000005f64;
     println!("err:{}", err);
-    for precision in 1..10{
+    let file = File::create("test_configs/precision.csv").unwrap();
+    let mut file = LineWriter::new(file);
+
+    for precision in 1..16{
         let mut str = String::from("0.");
         for pos in 0..precision{
             str.push('0');
         }
         str.push_str("49");
         let error = str.parse().unwrap();
-        let div = 10i32.pow(precision);
+        let div = 10i64.pow(precision);
         //let error = (0.5f64/div as f64).abs();
         let mut bound = PrecisionBound::new(error);
-        for num in 1..div{
+        for num in 1i64..div{
             let mut str_cur = String::from("0.");
             str_cur.push_str(format!("{:0width$}", num, width = precision as usize).as_ref());
             // cur = int_part+num as f64/div as f64;
             cur = str_cur.parse().unwrap();
-            let v = bound.precision_bound(cur);
-            //println!("{}th for precision:{}, cur:{}->v:{}", num,precision, cur, v);
+            let v = bound.precision_bound(cur+int_part);
+            // println!("{}th for precision:{}, cur:{}->v:{}", num,precision, cur, v);
             bound.cal_length(v);
         }
         let (int_len,dec_len) = bound.get_length();
         println!("length for integer part:{}, decimal part:{} to save {} position of decimal with error;{}", int_len,dec_len,precision,error);
+        file.write_all(format!("{},{}\n", precision, dec_len).as_ref());
     }
+    file.flush();
+}
+
+#[test]
+fn test_bitmap() {
+    let mut rb1 = Bitmap::create();
+    rb1.add(0);
+    rb1.add(2);
+    rb1.add(3);
+    rb1.add(4);
+    rb1.add(5);
+    rb1.add(100);
+    rb1.add(1000);
+    rb1.run_optimize();
+
+    let mut rb2 = Bitmap::create();
+    rb2.add(0);
+    rb2.add(4);
+    rb2.add(1000);
+    rb2.run_optimize();
+
+    let mut rb3 = Bitmap::create();
+
+    assert_eq!(rb1.cardinality(), 7);
+    assert!(rb1.contains(3));
+
+    rb1.and_inplace(&rb2);
+    rb3.add(5);
+    rb3.or_inplace(&rb1);
+
+    let mut rb4 = Bitmap::fast_or(&[&rb1, &rb2, &rb3]);
+
+    rb1.and_inplace(&rb2);
+    println!("{:?}", rb1);
+
+    rb3.add(5);
+    rb3.or_inplace(&rb1);
+
+    println!("{:?}", rb1);
+
+    rb3.add(5);
+    rb3.or_inplace(&rb1);
+
+    println!("{:?}", rb3.to_vec());
+    println!("{:?}", rb3);
+    println!("{:?}", rb4);
+
+    rb4 = Bitmap::fast_or(&[&rb1, &rb2, &rb3]);
+
+    println!("{:?}", rb4);
 }
