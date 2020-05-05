@@ -128,7 +128,7 @@ impl<'a,T> FCMCompressor<'a,T>
             self.input = vec;
         }
         else {
-            let (b, vec) = delta_num_bits(mydata);
+            let (base ,b, vec) = delta_num_bits(mydata);
             num_bit = b;
             self.input = vec.clone();
         }

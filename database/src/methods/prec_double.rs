@@ -6,32 +6,11 @@ use std::time::{SystemTime, Instant};
 use crate::segment::Segment;
 use std::fs::File;
 use std::io::{LineWriter, Write};
-use std::collections::HashMap;
 use croaring::Bitmap;
 
 /// END_MARKER is a special bit sequence used to indicate the end of the stream
 pub const EXP_MASK: u64 = 0b0111111111110000000000000000000000000000000000000000000000000000;
 pub const FIRST_ONE: u64 = 0b1000000000000000000000000000000000000000000000000000000000000000;
-
-lazy_static! {
-    static ref PRECISION_MAP : HashMap<i32, i32> =[(1, 5),
-        (2, 8),
-        (3, 11),
-        (4, 15),
-        (5, 18),
-        (6, 21),
-        (7, 25),
-        (8, 28),
-        (9, 31),
-        (10, 35),
-        (11, 38),
-        (12, 50),
-        (13, 10),
-        (14, 10),
-        (15, 10)]
-        .iter().cloned().collect();
-}
-
 
 
 pub struct PrecisionBound {
@@ -134,6 +113,11 @@ impl PrecisionBound {
 
     pub fn get_length(& self) -> (u64,u64){
         (self.int_length, self.decimal_length)
+    }
+
+    pub fn set_length(&mut self, ilen:u64, dlen:u64){
+        self.decimal_length = dlen;
+        self.int_length = ilen;
     }
 
     pub fn fetch_components(& self, bd:f64) -> (u64,u64){
@@ -349,55 +333,74 @@ fn run_benchmark_operations() {
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let mut cur = 0f64;
     let mut scl = 100000f64;
+    let mut sum  = 0.0;
     let start = Instant::now();
+    // let minValue = *(seg.get_data().iter().min().unwrap());
+    // let maxValue = *(seg.get_data().iter().max().unwrap());
     for x in 0..10 {
         for item in seg.get_data(){
             cur = (*item)* scl;
+            sum += cur;
         }
     }
     let duration = start.elapsed();
+    // println!("min:{}, max:{}", minValue,maxValue);
     println!("Time elapsed in multiply 400 million f64 is: {:?}", duration);
+    println!("multiply and sum: {}", sum);
+
+    sum = 0.0;
 
     let start0 = Instant::now();
     for x in 0..10 {
         for item in seg.get_data(){
             cur = (*item)/ scl;
-            cur = (*item)*cur
+            sum += cur;
         }
     }
     let duration0 = start0.elapsed();
     println!("Time elapsed in divede 400 million f64 is: {:?}", duration0);
+    println!("division and sum: {}", sum);
+    sum = 0.0;
 
     let start1 = Instant::now();
     for x in 0..10 {
         for item in seg.get_data(){
             cur += (*item)- scl;
+            sum += cur;
         }
     }
     let duration1 = start1.elapsed();
     println!("Time elapsed in sub 400 million f64 is: {:?}", duration1);
+    println!("subtraction and sum: {}", sum);
+    sum = 0.0;
 
     let start2 = Instant::now();
     for x in 0..10 {
         for item in seg.get_data(){
             cur = (*item)+ scl;
+            sum += cur;
         }
     }
     let duration2 = start2.elapsed();
     println!("Time elapsed in add 400 million f64 is: {:?}", duration2);
+    println!("addition and sum: {}", sum);
+    sum = 0.0;
 
     let start3 = Instant::now();
     let mut curu = 0u64;
     for x in 0..10 {
         for item in seg.get_data(){
             curu = unsafe { mem::transmute::<f64, u64>(*item) };
-            curu>>32;
-            curu&EXP_MASK;
-            curu|EXP_MASK;
+            curu = curu>>1;
+            // curu = curu|EXP_MASK;
+            curu = curu|1024u64;
+            curu = curu<<1;
+            sum += unsafe { mem::transmute::<u64, f64>(curu) };
         }
     }
     let duration3 = start3.elapsed();
     println!("Time elapsed in converse and right shift 400 million f64 is: {:?}", duration3);
+    println!("bitopts and sum: {}", sum);
 }
 
 #[test]
@@ -482,4 +485,8 @@ fn test_bitmap() {
     rb4 = Bitmap::fast_or(&[&rb1, &rb2, &rb3]);
 
     println!("{:?}", rb4);
+
+    let base:i64 = -10000000i64;
+    let div : i32 = base as i32;
+    println!("div: {}",div)
 }

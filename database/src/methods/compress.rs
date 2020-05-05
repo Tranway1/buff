@@ -27,7 +27,7 @@ use std::time::{SystemTime, Instant};
 use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
 use crate::methods::Methods::Fourier;
 use self::bitpacking::BitPacker1x;
-use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack};
+use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack, bp_double_encoder};
 use std::str::FromStr;
 use num::{FromPrimitive, Num};
 use rustfft::FFTnum;
@@ -38,6 +38,32 @@ use crate::methods::prec_double::PrecisionBound;
 use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
 use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 use std::any::Any;
+use rustfft::num_traits::float::FloatCore;
+use std::collections::HashMap;
+
+pub const SCALE: f64 = 10.0f64;
+pub const PRED: f64 = 1.0f64;
+pub const PRECISION:i32 = 5;
+
+lazy_static! {
+    static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
+        (2, 8),
+        (3, 11),
+        (4, 15),
+        (5, 18),
+        (6, 21),
+        (7, 25),
+        (8, 28),
+        (9, 31),
+        (10, 35),
+        (11, 38),
+        (12, 50),
+        (13, 10),
+        (14, 10),
+        (15, 10)]
+        .iter().cloned().collect();
+}
+
 
 pub trait CompressionMethod<T> {
 
@@ -163,19 +189,29 @@ impl BPCompress {
 
     fn decode(&self, bytes: Vec<u8>) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
         let ilen = bitpack.read(8).unwrap();
         println!("bit packing length:{}",ilen);
+        let target = PRED;
+        let adjust_target = (target -base_int as f64).ceil() as u32;
         let mut cur;
         let mut isqualify = true;
+        let mut res = Bitmap::create();
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
-            if i<10{
-                println!("{}th value: {}",i,cur);
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            isqualify = cur<adjust_target;
+            if isqualify{
+                res.add(i)
             }
-            isqualify = cur<1;
         }
+        res.run_optimize();
     }
 }
 
@@ -549,6 +585,7 @@ impl GorillaCompress {
         let mut done = false;
         let mut i=0;
         let mut isqualify = true;
+        let mut res = Bitmap::create();
         loop {
             if done {
                 break;
@@ -556,12 +593,16 @@ impl GorillaCompress {
 
             match decoder.next_val() {
                 Ok(dp) => {
-                    if i<10 {
-                        println!("{}",dp);
-                    }
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
                     isqualify = dp<1.0;
-                    i+=1;
-                    expected_datapoints.push(dp)},
+                    if (isqualify){
+                        res.add(i);
+                    }
+                    // i+=1;
+                    //expected_datapoints.push(dp);
+                },
                 Err(err) => {
                     if err == Error::EndOfStream {
                         done = true;
@@ -571,6 +612,7 @@ impl GorillaCompress {
                 }
             };
         }
+        res.run_optimize();
         expected_datapoints
     }
 
@@ -649,8 +691,7 @@ impl GorillaBDCompress {
         //println!("{}", decode_reader(bytes).unwrap());
     }
 
-    // Uncompresses a snappy Encoded vector of bytes and returns a string or error
-    // Here &[u8] implements BufRead
+
     fn decode(&self, bytes: Vec<u8>) -> Vec<f64> {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
@@ -705,6 +746,8 @@ impl<'a, T> CompressionMethod<T> for GorillaBDCompress
 
 
 
+
+
 #[derive(Clone)]
 pub struct SplitDoubleCompress {
     chunksize: usize,
@@ -723,11 +766,78 @@ impl SplitDoubleCompress {
         comp
     }
 
-    // Uncompresses a Gz Encoded vector of bytes and returns a string or error
-    // Here &[u8] implements BufRead
-    fn decode_reader(bytes: Vec<u8>) -> io::Result<String> {
-        unimplemented!()
+    fn decode(&self, bytes: Vec<u8>) {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+        let target = PRED;
+        let scl_target = ((target - base_int as f64)* self.scale as f64).ceil() as i64;
+        let int_target = (scl_target/self.scale as i64) as u32;
+        let dec_target = (scl_target%self.scale as i64) as u32;
+        let mut cur;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur<int_target{
+                res.add(i);
+            }
+            else if cur == int_target {
+                rb1.add(i);
+            };
+        }
+        rb1.run_optimize();
+        res.run_optimize();
+        let mut iterator = rb1.iter();
+        // check the decimal part
+        let mut it = iterator.next();
+        let mut dec_cur = 0;
+        let mut dec_pre:u32 = 0;
+        let mut dec = 0;
+        let mut delta = 0;
+        if it!=None{
+            dec_cur = it.unwrap();
+            if dec_cur!=0{
+                bitpack.skip(((dec_cur) * dlen) as usize);
+            }
+            dec = bitpack.read(dlen as usize).unwrap();
+            if dec<dec_target{
+                res.add(dec_cur);
+            }
+            // println!("index qualified {}, decimal:{}",dec_cur,dec);
+            it = iterator.next();
+            dec_pre = dec_cur;
+        }
+        while it!=None{
+            dec_cur = it.unwrap();
+            //println!("index qualified {}",dec_cur);
+            delta = dec_cur-dec_pre;
+            if delta != 1 {
+                bitpack.skip(((delta-1) * dlen) as usize);
+            }
+            dec = bitpack.read(dlen as usize).unwrap();
+            // if dec_cur<10{
+            //     println!("index qualified {}, decimal:{}",dec_cur,dec);
+            // }
+            if dec<dec_target{
+                res.add(dec_cur);
+            }
+            it = iterator.next();
+            dec_pre=dec_cur;
+        }
+
     }
+
 }
 
 impl<'a, T> CompressionMethod<T> for SplitDoubleCompress
@@ -757,6 +867,76 @@ impl<'a, T> CompressionMethod<T> for SplitDoubleCompress
 
 
 #[derive(Clone)]
+pub struct BPDoubleCompress {
+    chunksize: usize,
+    batchsize: usize,
+    scale: usize
+}
+
+impl BPDoubleCompress {
+    pub fn new(chunksize: usize, batchsize: usize, scale: usize) -> Self {
+        BPDoubleCompress { chunksize, batchsize, scale }
+    }
+
+    fn encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
+        where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+        let comp = bp_double_encoder(seg.get_data().as_slice(),self.scale);
+        comp
+    }
+
+    fn decode(&self, bytes: Vec<u8>) {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        let target = PRED;
+        let adjust_target = ((target*self.scale as f64).ceil() as i32 -base_int) as u32;
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut res = Bitmap::create();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur<adjust_target{
+                res.add(i);
+            }
+
+        }
+        res.run_optimize();
+    }
+}
+
+impl<'a, T> CompressionMethod<T> for BPDoubleCompress
+    where T: Serialize + Clone+ Copy+Into<f64>+ Deserialize<'a>{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress<'b>(&self, segs: &mut Vec<Segment<T>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in BP function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone)]
 pub struct SplitBDDoubleCompress {
     chunksize: usize,
     batchsize: usize
@@ -771,14 +951,11 @@ impl SplitBDDoubleCompress {
 
         let w = BufferedWriter::new();
 
-        // 1482892260 is the Unix timestamp of the start of the stream
-        let mut encoder = StdEncoder::new(0, w);
-
         let mut bd_vec = Vec::new();
         let mut dec_vec = Vec::new();
 
         let mut t:u32 =0;
-        let mut bound = PrecisionBound::new(0.00005);
+        let mut bound = PrecisionBound::new(0.000005);
         let start = Instant::now();
         for val in seg.get_data(){
             let v = bound.precision_bound((*val).into());
@@ -806,10 +983,92 @@ impl SplitBDDoubleCompress {
         let mut i= 0;
         for bd in bd_vec{
             let (int_part, dec_part) = bound.fetch_components(bd);
-            if i<10{
-                println!("{}th, int: {}, decimal: {}",i,int_part,dec_part);
+            // if i<10{
+            //     println!("cur: {}",bd);
+            //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
+            // }
+            // i += 1;
+            bitpack_vec.write(int_part as u32, ilen).unwrap();
+            dec_vec.push(dec_part);
+        }
+        let duration1 = start1.elapsed();
+        println!("Time elapsed in dividing double function() is: {:?}", duration1);
+
+        for d in dec_vec {
+            bitpack_vec.write(d as u32, dlen).unwrap();
+        }
+        let vec = bitpack_vec.into_vec();
+
+        let origin = t * mem::size_of::<T>() as u32;
+        info!("original size:{}", origin);
+        info!("compressed size:{}", vec.len());
+        let ratio = vec.len() as f64 /origin as f64;
+        print!("{}",ratio);
+        vec
+        //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
+        //println!("{}", decode_reader(bytes).unwrap());
+    }
+
+    fn offset_encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
+        where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+
+        let mut bd_vec = Vec::new();
+        let mut dec_vec = Vec::new();
+
+        let mut t:u32 =0;
+        let mut bound = PrecisionBound::new(0.000005);
+        let start = Instant::now();
+        let mut min = f64::max_value();
+        let mut max = f64::min_value();
+
+
+        for val in seg.get_data(){
+            let v = (*val).into();
+            if (v<min){
+                min = v;
             }
-            i += 1;
+            if (v>max){
+                max = v;
+            }
+            bd_vec.push(v);
+            t+=1;
+            bound.cal_length(v);
+//            println!("{}=>{}",(*val).into(),v);
+//            let preu =  unsafe { mem::transmute::<f64, u64>((*val).into()) };
+//            let bdu =  unsafe { mem::transmute::<f64, u64>(v) };
+//            println!("{:#066b} => {:#066b}", preu, bdu);
+        }
+        let min_int = min.trunc();
+        let max_int = max.trunc();
+        let delta = max_int-min_int;
+        let mut single_int = false;
+        let mut cal_int_length = 0.0;
+        if delta == 0.0 {
+            single_int = true;
+        }else {
+            cal_int_length = (max_int-min_int).log2().ceil();
+        }
+        let duration = start.elapsed();
+        println!("Time elapsed in bound double function() is: {:?}", duration);
+        let start1 = Instant::now();
+        let (int_len,dec_len) = (cal_int_length as u64,*(PRECISION_MAP.get(&PRECISION).unwrap()) as u64);
+        bound.set_length(int_len,dec_len);
+        let ilen = int_len as usize;
+        let dlen = dec_len as usize;
+        println!("int_len:{},dec_len:{}",int_len,dec_len);
+        //let cap = (int_len+dec_len)* t as u64 /8;
+        let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+        bitpack_vec.write(t, 32);
+        bitpack_vec.write(ilen as u32, 32);
+        bitpack_vec.write(dlen as u32, 32);
+        let mut i= 0;
+        for bd in bd_vec{
+            let (int_part, dec_part) = bound.fetch_components(bd);
+            // if i<10{
+            //     println!("cur: {}",bd);
+            //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
+            // }
+            // i += 1;
             bitpack_vec.write(int_part as u32, ilen).unwrap();
             dec_vec.push(dec_part);
         }
@@ -849,7 +1108,8 @@ impl SplitBDDoubleCompress {
         println!("Time elapsed in bound double function() is: {:?}", duration);
         let start1 = Instant::now();
         // let (int_len,dec_len) = bound.get_length();
-        let (int_len,dec_len) = (4u64,19u64);
+        let (int_len,dec_len) = (4u64,18u64);
+        bound.set_length(int_len,dec_len);
         let ilen = int_len as usize;
         let dlen = dec_len as usize;
         println!("int_len:{},dec_len:{}",int_len,dec_len);
@@ -858,8 +1118,14 @@ impl SplitBDDoubleCompress {
         bitpack_vec.write(t, 32);
         bitpack_vec.write(ilen as u32, 32);
         bitpack_vec.write(dlen as u32, 32);
+        let mut i =0;
         for bd in seg.get_data(){
             let (int_part, dec_part) = bound.fetch_components((*bd).into());
+            // if i<10{
+            //     println!("cur: {}",(*bd).into());
+            //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
+            // }
+            // i+=1;
             bitpack_vec.write(int_part as u32, ilen).unwrap();
             dec_vec.push(dec_part);
         }
@@ -894,13 +1160,13 @@ impl SplitBDDoubleCompress {
         let mut res = Bitmap::create();
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
-            if i<10{
-                println!("{}th value: {}",i,cur);
-            }
-            if cur<1{
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur<2{
                 res.add(i);
             }
-            else if cur == 1 {
+            else if cur == 2 {
                 rb1.add(i);
             };
         }
@@ -922,7 +1188,7 @@ impl SplitBDDoubleCompress {
             if dec<50{
                 res.add(dec_cur);
             }
-            println!("index qualified {}, decimal:{}",dec_cur,dec);
+            // println!("index qualified {}, decimal:{}",dec_cur,dec);
             it = iterator.next();
             dec_pre = dec_cur;
         }
@@ -935,7 +1201,7 @@ impl SplitBDDoubleCompress {
             }
             dec = bitpack.read(dlen as usize).unwrap();
             if dec_cur<10{
-                println!("index qualified {}, decimal:{}",dec_cur,dec);
+                // println!("index qualified {}, decimal:{}",dec_cur,dec);
             }
             if dec<50{
                 res.add(dec_cur);
@@ -1185,7 +1451,7 @@ pub fn test_splitbd_compress_on_file<'a,T>(file: &str)
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
     let comp = SplitBDDoubleCompress::new(10,10);
-    let compressed = comp.encode(&mut seg);
+    let compressed = comp.offset_encode(&mut seg);
     let duration = start.elapsed();
     info!("Time elapsed in splitbd compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
@@ -1308,6 +1574,24 @@ pub fn test_BP_compress_on_int(file:&str,scl:i32) {
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
+
+pub fn test_BP_double_compress_on_file<'a,T>(file: &str,scl:i32)
+    where T: FromStr + Serialize + Clone +Copy+Into<f64> + Num+PartialOrd+ Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = BPDoubleCompress::new(10, 10, scl as usize);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in split compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*((mem::size_of::<T>()) as usize);
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
+    println!(",    {}", throughput);
+}
+
 pub fn test_split_compress_on_file<'a,T>(file: &str,scl:i32)
     where T: FromStr + Serialize + Clone +Copy+Into<f64> + Num+PartialOrd+ Deserialize<'a>{
     let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
@@ -1321,6 +1605,7 @@ pub fn test_split_compress_on_file<'a,T>(file: &str,scl:i32)
     let duration = start.elapsed();
     info!("Time elapsed in split compress function() is: {:?}", duration);
     let org_size = file_vec.len()*((mem::size_of::<T>()) as usize);
+    //println!("orginal size {}", org_size);
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
     }
@@ -1591,34 +1876,43 @@ fn test_My_Grilla_compress() {
     println!("expected datapoints: {:?}", expected_datapoints);
 }
 
+
 #[test]
 fn run_bpsplit_encoding_decoding() {
     let args: Vec<String> = env::args().collect();
     println!("Arguments: {:?}", args);
     let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let comp = SplitDoubleCompress::new(10,10,100000);
     let start = Instant::now();
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    println!("Time elapsed in {:?} bpsplit compress function() is: {:?}",comp.type_id(), duration);
     test_split_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k",100000);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 
 #[test]
-fn run_bp_encoding_decoding() {
+fn run_bp_double_encoding_decoding() {
     let args: Vec<String> = env::args().collect();
     println!("Arguments: {:?}", args);
-    let file_iter = construct_file_iterator_int_signed("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',',100000);
-    let file_vec: Vec<i32>= file_iter.unwrap().collect();
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
+    let file_vec: Vec<f64>= file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
-    let comp = BPCompress::new(10,10);
+    let comp = BPDoubleCompress::new(10,10,100000);
     let start = Instant::now();
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    // test_BP_compress_on_int("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k",100000);
+    println!("Time elapsed in {:?} bp_double compress function() is: {:?}",comp.type_id(), duration);
+    test_BP_double_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k",100000);
     //
     let start = Instant::now();
     comp.decode(compressed);
@@ -1632,14 +1926,16 @@ fn run_splitbd_encoding_decoding() {
     println!("Arguments: {:?}", args);
     let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
 //    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/ECGFiveDays/ECGFiveDays_TEST", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let comp = SplitBDDoubleCompress::new(10,10);
     let start = Instant::now();
-    let compressed = comp.encode(&mut seg);
+    let compressed = comp.offset_encode(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    // test_splitbd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    println!("Time elapsed in {:?} splitbd compress function() is: {:?}",comp.type_id(), duration);
+    test_splitbd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
     let start = Instant::now();
     comp.decode(compressed);
     let duration = start.elapsed();
@@ -1652,14 +1948,16 @@ fn run_gorillabd_encoding_decoding() {
     let args: Vec<String> = env::args().collect();
     println!("Arguments: {:?}", args);
     let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let comp = GorillaBDCompress::new(10,10);
     let start = Instant::now();
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    // test_grillabd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    println!("Time elapsed in {:?} gorillabd compress function() is: {:?}",comp.type_id(), duration);
+    test_grillabd_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
     let start = Instant::now();
     comp.decode(compressed);
     let duration = start.elapsed();
@@ -1671,14 +1969,16 @@ fn run_gorilla_encoding_decoding() {
     let args: Vec<String> = env::args().collect();
     println!("Arguments: {:?}", args);
     let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 1, ',');
-    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let comp = GorillaCompress::new(10,10);
     let start = Instant::now();
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
-    // test_grilla_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
+    println!("Time elapsed in {:?} gorilla compress function() is: {:?}",comp.type_id(), duration);
+    test_grilla_compress_on_file::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k");
     let start = Instant::now();
     comp.decode(compressed);
     let duration = start.elapsed();

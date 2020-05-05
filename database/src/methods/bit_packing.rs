@@ -6,6 +6,7 @@ use std::mem;
 use crate::client::construct_file_iterator_skip_newline;
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
+use rustfft::num_traits::float::FloatCore;
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;
@@ -236,7 +237,7 @@ pub(crate) fn num_bits(mydata: &[u32]) -> u8{
     bits
 }
 
-pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
+pub(crate) fn delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
     info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
@@ -256,6 +257,30 @@ pub(crate) fn delta_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
     }
     let lead = xor.leading_zeros();
     let bits:u8 = (32 -lead) as u8;
+    info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
+    (min, bits, vec)
+}
+
+pub(crate) fn delta_64num_bits(mydata: &[i64]) -> (u8,Vec<u64>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
+    let mut vec = Vec::new();
+    let mut xor:u64 = 0;
+    let mut delta = 0u64;
+    let mut min = 0i64;
+    let minValue = mydata.iter().min();
+    info!("min value:{}",minValue.unwrap());
+    match minValue {
+        Some(&val) => min = val,
+        None => panic!("empty"),
+    }
+
+    for &b in mydata {
+        delta = (b - min) as u64;
+        vec.push(delta);
+        xor = xor | delta;
+    }
+    let lead = xor.leading_zeros();
+    let bits:u8 = (64 -lead) as u8;
     info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
     (bits,vec)
 }
@@ -279,7 +304,7 @@ pub(crate) fn split_num_bits(mydata: &[i32], scl: usize) -> (u8,Vec<u32>,u8,Vec<
         delta = (b - min) as u32;
         let div = delta / scl as u32;
         let rem = delta % scl as u32;
-        intpart.push(delta);
+        intpart.push(div);
         decpart.push(rem);
         intxor = intxor | div;
         decxor = decxor | rem;
@@ -290,6 +315,46 @@ pub(crate) fn split_num_bits(mydata: &[i32], scl: usize) -> (u8,Vec<u32>,u8,Vec<
     let decbits:u8 = (32 -declead) as u8;
     info!("10th vec: {},{},{},{}", intpart[0],intpart[1],intpart[2],intpart[3]);
     (intbits,intpart,decbits,decpart)
+}
+
+pub(crate) fn split_64num_bits(mydata: &[i64], scl: usize) -> (i32, u8,Vec<u64>,u8,Vec<u64>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
+    let mut intpart = Vec::new();
+    let mut decpart = Vec::new();
+    let mut intxor:u64 = 0;
+    let mut decxor:u64 = 0;
+    let mut delta = 0u64;
+    let mut min = 0i64;
+    let minValue = mydata.iter().min();
+    //let maxValue = mydata.iter().max();
+    //println!("min:{}, max:{}",minValue.unwrap(),maxValue.unwrap());
+    info!("min value:{}",minValue.unwrap());
+    match minValue {
+        Some(&val) => min = val,
+        None => panic!("empty"),
+    }
+    let mut min_int = min/scl as i64;
+    if min_int < 0{
+        min_int -= 1;
+    }
+    min = min_int * scl as i64;
+
+
+    for &b in mydata {
+        delta = (b - min) as u64;
+        let div = delta / scl as u64;
+        let rem = delta % scl as u64;
+        intpart.push(div);
+        decpart.push(rem);
+        intxor = intxor | div;
+        decxor = decxor | rem;
+    }
+    let intlead = intxor.leading_zeros();
+    let declead = decxor.leading_zeros();
+    let intbits:u8 = (64 -intlead) as u8;
+    let decbits:u8 = (64 -declead) as u8;
+    info!("10th vec: {},{},{},{}", intpart[0],intpart[1],intpart[2],intpart[3]);
+    (min_int as i32,intbits,intpart,decbits,decpart)
 }
 
 pub(crate) fn diff_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
@@ -307,7 +372,7 @@ pub(crate) fn diff_num_bits(mydata: &[i32]) -> (u8,Vec<u32>){
         i+=1;
     }
     info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
-    let (bits,vec1) = delta_num_bits(&vec);
+    let (base, bits,vec1) = delta_num_bits(&vec);
     info!("10th vec: {},{},{},{}", vec1[0],vec1[1],vec1[2],vec1[3]);
     (bits,vec1)
 }
@@ -343,7 +408,7 @@ pub(crate) fn delta_offset<T: Clone+Copy+Num+PartialOrd>(mydata: &[T]) -> Vec<T>
             min = b;
         }
     }
-    // todo: avoid using 2
+    // avoid using 2
     // min = min - T::one() - T::one();
     for &b in mydata {
         delta = (b - min);
@@ -353,10 +418,13 @@ pub(crate) fn delta_offset<T: Clone+Copy+Num+PartialOrd>(mydata: &[T]) -> Vec<T>
 }
 
 pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
-    let (num_bits, delta_vec) = delta_num_bits(mydata);
+    let (base, num_bits, delta_vec) = delta_num_bits(mydata);
+    println!("base int:{}",base);
     info!("Number of bits: {}", num_bits);
     info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
+    let ubase_int = unsafe { mem::transmute::<i32, u32>(base) };
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    bitpack_vec.write(ubase_int,32);
     bitpack_vec.write(delta_vec.len() as u32, 32);
     bitpack_vec.write(num_bits as u32, 8);
     for &b in delta_vec.as_slice() {
@@ -369,19 +437,59 @@ pub(crate) fn BP_encoder(mydata: &[i32]) -> Vec<u8>{
     vec
 }
 
+pub(crate) fn bp_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
+    where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+    let ldata: Vec<i32> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i32).collect::<Vec<i32>>();
+    let (base, num_bits, delta_vec) = delta_num_bits(ldata.as_ref());
+    println!("base int:{}",base);
+    info!("Number of bits: {}", num_bits);
+    info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
+    let ubase_int = unsafe { mem::transmute::<i32, u32>(base) };
+    let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    bitpack_vec.write(ubase_int,32);
+    bitpack_vec.write(delta_vec.len() as u32, 32);
+    bitpack_vec.write(num_bits as u32, 8);
+    let mut i =0 ;
+    for &b in delta_vec.as_slice() {
+        // if i<10{
+        //     println!("{}th value: {}",i,b);
+        // }
+        // i+=1;
+        bitpack_vec.write(b, num_bits as usize).unwrap();
+
+    }
+    let vec = bitpack_vec.into_vec();
+    info!("Length of compressed data: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*mem::size_of::<T>() as f32);
+    print!("{}",ratio);
+    vec
+}
+
 
 pub(crate) fn split_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
-    let ldata: Vec<i32> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i32).collect::<Vec<i32>>();
-    let (int_bits, int_vec,dec_bits,dec_vec) = split_num_bits(ldata.as_slice(),scl);
-    //info!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
-    //info!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
+    let ldata: Vec<i64> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i64).collect::<Vec<i64>>();
+    let (base_int, int_bits, int_vec,dec_bits,dec_vec) = split_64num_bits(ldata.as_slice(),scl);
+    println!("base int:{}",base_int);
+    println!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);
+    println!("10th decimal vec: {},{},{},{}", dec_vec[0],dec_vec[1],dec_vec[2],dec_vec[3]);
+    println!("10th integer vec: {},{},{},{}", int_vec[0],int_vec[1],int_vec[2],int_vec[3]);
+    let ubase_int = unsafe { mem::transmute::<i32, u32>(base_int) };
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    bitpack_vec.write(ubase_int,32);
+    bitpack_vec.write(ldata.len() as u32, 32);
+    bitpack_vec.write(int_bits as u32, 8);
+    bitpack_vec.write(dec_bits as u32, 8);
+    let mut i =0 ;
     for &b in int_vec.as_slice() {
-        bitpack_vec.write(b, int_bits as usize).unwrap();
+        // if i<10{
+        //     println!("{}th value: {}",i,b);
+        // }
+        // i+=1;
+        bitpack_vec.write(b as u32, int_bits as usize).unwrap();
     }
     for &d in dec_vec.as_slice() {
-        bitpack_vec.write(d, dec_bits as usize).unwrap();
+        bitpack_vec.write(d as u32,dec_bits as usize).unwrap();
     }
     let vec = bitpack_vec.into_vec();
     info!("compressed size: {}", vec.len());
