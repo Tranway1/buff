@@ -120,21 +120,24 @@ impl PrecisionBound {
         self.int_length = ilen;
     }
 
-    pub fn fetch_components(& self, bd:f64) -> (u64,u64){
+    pub fn fetch_components(& self, bd:f64) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
         let exp = ((bdu & EXP_MASK) >> 52) as i32 - 1023 as i32;
+        let sign = bdu&FIRST_ONE;
         let mut int_part = 0u64;
         let mut dec_part = 0u64;
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
-            int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64
+            // int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
         }else if exp<self.precision_exp{
             dec_part=0u64;
         }else{
-
             dec_part = (((bdu << (12)) >>1) | FIRST_ONE) >> ((-exp - 1) as u64);
         }
-        (int_part,dec_part >> 64u64-self.decimal_length)
+        // int_part = int_part|sign;
+        // let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
+        let signed_int = bd.trunc() as i64;
+        (signed_int,dec_part >> 64u64-self.decimal_length)
     }
 
     pub fn finer(&self, input:f64) -> Vec<u8>{
@@ -486,7 +489,7 @@ fn test_bitmap() {
 
     println!("{:?}", rb4);
 
-    let base:i64 = -10000000i64;
-    let div : i32 = base as i32;
+    let base = -1i32;
+    let div  = base as i64;
     println!("div: {}",div)
 }

@@ -42,8 +42,9 @@ use rustfft::num_traits::float::FloatCore;
 use std::collections::HashMap;
 
 pub const SCALE: f64 = 10.0f64;
-pub const PRED: f64 = 1.0f64;
+pub const PRED: f64 = 91.5f64;
 pub const PRECISION:i32 = 5;
+pub const PREC_DELTA:f64 = 0.000005f64;
 
 lazy_static! {
     static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
@@ -206,7 +207,7 @@ impl BPCompress {
             // if i<10{
             //     println!("{}th value: {}",i,cur);
             // }
-            isqualify = cur<adjust_target;
+            isqualify = cur>adjust_target;
             if isqualify{
                 res.add(i)
             }
@@ -549,7 +550,7 @@ impl GorillaCompress {
         // 1482892260 is the Unix timestamp of the start of the stream
         let mut encoder = GorillaEncoder::new(0, w);
         let mut t =0;
-        let mut bound = PrecisionBound::new(0.000005);
+        let mut bound = PrecisionBound::new(PREC_DELTA);
         let start = Instant::now();
         for val in seg.get_data(){
 //            let v = bound.precision_bound((*val).into());
@@ -596,11 +597,10 @@ impl GorillaCompress {
                     // if i<10 {
                     //     println!("{}",dp);
                     // }
-                    isqualify = dp<1.0;
-                    if (isqualify){
+                    if (dp>PRED){
                         res.add(i);
                     }
-                    // i+=1;
+                    i+=1;
                     //expected_datapoints.push(dp);
                 },
                 Err(err) => {
@@ -613,6 +613,7 @@ impl GorillaCompress {
             };
         }
         res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
         expected_datapoints
     }
 
@@ -665,7 +666,7 @@ impl GorillaBDCompress {
         let mut actual_datapoints:Vec<f64> = Vec::new();
 
         let mut t =0;
-        let mut bound = PrecisionBound::new(0.000005);
+        let mut bound = PrecisionBound::new(PREC_DELTA);
 
         let start = Instant::now();
         for val in seg.get_data(){
@@ -699,13 +700,25 @@ impl GorillaBDCompress {
         let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
+        let mut i=0;
+        let mut isqualify = true;
+        let mut res = Bitmap::create();
         loop {
             if done {
                 break;
             }
 
             match decoder.next_val() {
-                Ok(dp) => expected_datapoints.push(dp),
+                Ok(dp) => {
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    if (dp>PRED){
+                        res.add(i);
+                    }
+                    i+=1;
+                    //expected_datapoints.push(dp);
+                },
                 Err(err) => {
                     if err == Error::EndOfStream {
                         done = true;
@@ -715,6 +728,8 @@ impl GorillaBDCompress {
                 }
             };
         }
+        res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
         expected_datapoints
     }
 
@@ -789,7 +804,7 @@ impl SplitDoubleCompress {
             // if i<10{
             //     println!("{}th value: {}",i,cur);
             // }
-            if cur<int_target{
+            if cur>int_target{
                 res.add(i);
             }
             else if cur == int_target {
@@ -798,6 +813,7 @@ impl SplitDoubleCompress {
         }
         rb1.run_optimize();
         res.run_optimize();
+        println!("Number of qualified int items:{}", res.cardinality());
         let mut iterator = rb1.iter();
         // check the decimal part
         let mut it = iterator.next();
@@ -811,7 +827,7 @@ impl SplitDoubleCompress {
                 bitpack.skip(((dec_cur) * dlen) as usize);
             }
             dec = bitpack.read(dlen as usize).unwrap();
-            if dec<dec_target{
+            if dec>dec_target{
                 res.add(dec_cur);
             }
             // println!("index qualified {}, decimal:{}",dec_cur,dec);
@@ -829,13 +845,13 @@ impl SplitDoubleCompress {
             // if dec_cur<10{
             //     println!("index qualified {}, decimal:{}",dec_cur,dec);
             // }
-            if dec<dec_target{
+            if dec>dec_target{
                 res.add(dec_cur);
             }
             it = iterator.next();
             dec_pre=dec_cur;
         }
-
+        println!("Number of qualified items:{}", res.cardinality());
     }
 
 }
@@ -902,12 +918,13 @@ impl BPDoubleCompress {
             // if i<10{
             //     println!("{}th value: {}",i,cur);
             // }
-            if cur<adjust_target{
+            if cur>adjust_target{
                 res.add(i);
             }
 
         }
         res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
     }
 }
 
@@ -955,7 +972,7 @@ impl SplitBDDoubleCompress {
         let mut dec_vec = Vec::new();
 
         let mut t:u32 =0;
-        let mut bound = PrecisionBound::new(0.000005);
+        let mut bound = PrecisionBound::new(PREC_DELTA);
         let start = Instant::now();
         for val in seg.get_data(){
             let v = bound.precision_bound((*val).into());
@@ -1016,7 +1033,7 @@ impl SplitBDDoubleCompress {
         let mut dec_vec = Vec::new();
 
         let mut t:u32 =0;
-        let mut bound = PrecisionBound::new(0.000005);
+        let mut bound = PrecisionBound::new(PREC_DELTA);
         let start = Instant::now();
         let mut min = f64::max_value();
         let mut max = f64::min_value();
@@ -1032,7 +1049,7 @@ impl SplitBDDoubleCompress {
             }
             bd_vec.push(v);
             t+=1;
-            bound.cal_length(v);
+            // bound.cal_length(v);
 //            println!("{}=>{}",(*val).into(),v);
 //            let preu =  unsafe { mem::transmute::<f64, u64>((*val).into()) };
 //            let bdu =  unsafe { mem::transmute::<f64, u64>(v) };
@@ -1041,6 +1058,10 @@ impl SplitBDDoubleCompress {
         let min_int = min.trunc();
         let max_int = max.trunc();
         let delta = max_int-min_int;
+        let base_int = min_int as i32;
+        println!("base integer: {}",base_int);
+        let ubase_int = unsafe { mem::transmute::<i32, u32>(base_int) };
+        let base_int64:i64 = base_int as i64;
         let mut single_int = false;
         let mut cal_int_length = 0.0;
         if delta == 0.0 {
@@ -1058,6 +1079,7 @@ impl SplitBDDoubleCompress {
         println!("int_len:{},dec_len:{}",int_len,dec_len);
         //let cap = (int_len+dec_len)* t as u64 /8;
         let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+        bitpack_vec.write(ubase_int,32);
         bitpack_vec.write(t, 32);
         bitpack_vec.write(ilen as u32, 32);
         bitpack_vec.write(dlen as u32, 32);
@@ -1068,8 +1090,8 @@ impl SplitBDDoubleCompress {
             //     println!("cur: {}",bd);
             //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
             // }
-            // i += 1;
-            bitpack_vec.write(int_part as u32, ilen).unwrap();
+            i += 1;
+            bitpack_vec.write((int_part-base_int64) as u32, ilen).unwrap();
             dec_vec.push(dec_part);
         }
         let duration1 = start1.elapsed();
@@ -1101,7 +1123,7 @@ impl SplitBDDoubleCompress {
         let mut dec_vec = Vec::new();
 
         let mut t:u32 =0;
-        let mut bound = PrecisionBound::new(0.000005);
+        let mut bound = PrecisionBound::new(PREC_DELTA);
         let start = Instant::now();
         t = seg.get_data().len() as u32;
         let duration = start.elapsed();
@@ -1149,29 +1171,41 @@ impl SplitBDDoubleCompress {
 
     fn decode(&self, bytes: Vec<u8>) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(PREC_DELTA);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
         let ilen = bitpack.read(32).unwrap();
         println!("bit packing length:{}",ilen);
         let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
         // check integer part and update bitmap;
         let mut cur;
         let mut rb1 = Bitmap::create();
         let mut res = Bitmap::create();
+        let target = PRED;
+        let (int_part, dec_part) = bound.fetch_components(target);
+        let int_target = (int_part-base_int as i64) as u32;
+        let dec_target = dec_part as u32;
+        println!("target value with integer part:{}, decimal part:{}",int_target,dec_target);
+
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
             // if i<10{
             //     println!("{}th value: {}",i,cur);
             // }
-            if cur<2{
+            if cur>int_target{
                 res.add(i);
             }
-            else if cur == 2 {
+            else if cur == int_target {
                 rb1.add(i);
             };
         }
         rb1.run_optimize();
         res.run_optimize();
+        println!("Number of qualified int items:{}", res.cardinality());
         let mut iterator = rb1.iter();
         // check the decimal part
         let mut it = iterator.next();
@@ -1185,7 +1219,7 @@ impl SplitBDDoubleCompress {
                 bitpack.skip(((dec_cur) * dlen) as usize);
             }
             dec = bitpack.read(dlen as usize).unwrap();
-            if dec<50{
+            if dec>dec_target{
                 res.add(dec_cur);
             }
             // println!("index qualified {}, decimal:{}",dec_cur,dec);
@@ -1200,16 +1234,16 @@ impl SplitBDDoubleCompress {
                 bitpack.skip(((delta-1) * dlen) as usize);
             }
             dec = bitpack.read(dlen as usize).unwrap();
-            if dec_cur<10{
-                // println!("index qualified {}, decimal:{}",dec_cur,dec);
-            }
-            if dec<50{
+            // if dec_cur<10{
+            //     println!("index qualified {}, decimal:{}",dec_cur,dec);
+            // }
+            if dec>dec_target{
                 res.add(dec_cur);
             }
             it = iterator.next();
             dec_pre=dec_cur;
         }
-
+        println!("Number of qualified items:{}", res.cardinality());
     }
 }
 
@@ -1226,7 +1260,7 @@ impl<'a, T> CompressionMethod<T> for SplitBDDoubleCompress
     fn run_compress<'b>(&self, segs: &mut Vec<Segment<T>>) {
         let start = Instant::now();
         for seg in segs {
-            self.encode(seg);
+            self.offset_encode(seg);
         }
         let duration = start.elapsed();
         info!("Time elapsed in Gorilla function() is: {:?}", duration);
