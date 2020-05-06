@@ -120,6 +120,26 @@ impl PrecisionBound {
         self.int_length = ilen;
     }
 
+    pub fn fast_fetch_components(& self, bd:f64) -> (i64,u64){
+        let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
+        let exp = 6 as i32;
+        // let sign = bdu&FIRST_ONE;
+        let mut int_part = 0u64;
+        let mut dec_part = 0u64;
+        // if exp>=0{
+            dec_part = bdu << (12 + exp) as u64;
+            int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+        // }else if exp<self.precision_exp{
+        //     dec_part=0u64;
+        // }else{
+        //     dec_part = (((bdu << (12)) >>1) | FIRST_ONE) >> ((-exp - 1) as u64);
+        // }
+        // int_part = int_part|sign;
+        // let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
+        //let signed_int = bd.trunc() as i64;
+        (int_part as i64,dec_part >> 64u64-self.decimal_length)
+    }
+
     pub fn fetch_components(& self, bd:f64) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
         let exp = ((bdu & EXP_MASK) >> 52) as i32 - 1023 as i32;
