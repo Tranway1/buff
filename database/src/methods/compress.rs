@@ -848,7 +848,52 @@ impl SplitDoubleCompress {
         comp
     }
 
-    fn decode(&self, bytes: Vec<u8>) {
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+        let target = PRED;
+        let scl_target = ((target - base_int as f64)* self.scale as f64).ceil() as i64;
+        let int_target = (scl_target/self.scale as i64) as u32;
+        let dec_target = (scl_target%self.scale as i64) as u32;
+        let mut cur;
+        let mut int_vec:Vec<i32> = Vec::new();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            int_vec.push(cur as i32 + base_int);
+        }
+
+        let mut dec = 0;
+        let dec_scl:f64 = self.scale as f64;
+        println!("Scale for decimal:{}", dec_scl);
+        let mut j = 0;
+        let mut cur_intf = 0f64;
+        for int_comp in int_vec{
+            cur_intf = int_comp as f64;
+            dec = bitpack.read(dlen as usize).unwrap();
+            if j<10{
+                println!("{}th item {}, decimal:{}",j, cur_intf + (dec as f64) / dec_scl,dec);
+            }
+            j += 1;
+            expected_datapoints.push(cur_intf + (dec as f64) / dec_scl);
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    fn range_filter(&self, bytes: Vec<u8>) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let ubase_int = bitpack.read(32).unwrap();
         let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
@@ -967,7 +1012,35 @@ impl BPDoubleCompress {
         comp
     }
 
-    fn decode(&self, bytes: Vec<u8>) {
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        let target = PRED;
+        let adjust_target = ((target*scl).ceil() as i32 -base_int) as u32;
+        let base_f64 = base_int as f64;
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut res = Bitmap::create();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,(cur as f64 + base_f64)/scl);
+            // }
+            expected_datapoints.push((cur as f64 + base_f64)/scl);
+
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    fn range_filter(&self, bytes: Vec<u8>) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let ubase_int = bitpack.read(32).unwrap();
         let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
@@ -1102,8 +1175,8 @@ impl SplitBDDoubleCompress {
         let mut t:u32 = seg.get_data().len() as u32;
         let mut bound = PrecisionBound::new(PREC_DELTA);
         let start = Instant::now();
-        let mut min = f64::MAX;
-        let mut max = f64::MIN;
+        let mut min = std::f64::MAX;
+        let mut max = std::f64::MIN;
 
 
         for val in seg.get_data(){
@@ -1153,21 +1226,20 @@ impl SplitBDDoubleCompress {
         // for val in seg.get_data(){
         for bd in bd_vec{
             let (int_part, dec_part) = bound.fetch_components(bd);
-            if i<10{
-                println!("cur: {}",bd);
-                println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
-            }
-            i += 1;
+            // if i<10{
+            //     println!("cur: {}",bd);
+            //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
+            // }
+            // i += 1;
             bitpack_vec.write((int_part-base_int64) as u32, ilen).unwrap();
             dec_vec.push(dec_part as u32);
         }
-        println!("total number of bd is: {}", i);
         let duration1 = start1.elapsed();
         println!("Time elapsed in dividing double function() is: {:?}", duration1);
 
         let mut j= 0;
         for d in dec_vec {
-            j += 1;
+            // j += 1;
             bitpack_vec.write(d, dlen).unwrap();
         }
         println!("total number of dec is: {}", j);
@@ -1259,9 +1331,9 @@ impl SplitBDDoubleCompress {
 
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
-            if i<10{
-                println!("{}th value: {}",i,cur);
-            }
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
             int_vec.push(cur as i32 + base_int);
         }
 
@@ -1273,10 +1345,10 @@ impl SplitBDDoubleCompress {
         for int_comp in int_vec{
             cur_intf = int_comp as f64;
             dec = bitpack.read(dlen as usize).unwrap();
-            if j<10{
-                println!("{}th item {}, decimal:{}",j, cur_intf + cur_intf.signum() *(dec as f64) / dec_scl,dec);
-            }
-            j += 1;
+            // if j<10{
+            //     println!("{}th item {}, decimal:{}",j, cur_intf + cur_intf.signum() *(dec as f64) / dec_scl,dec);
+            // }
+            // j += 1;
             expected_datapoints.push(cur_intf + cur_intf.signum() *(dec as f64) / dec_scl);
         }
         println!("Number of scan items:{}", expected_datapoints.len());
@@ -2061,7 +2133,6 @@ fn run_bp_double_encoding_decoding() {
     let duration = start.elapsed();
     println!("Time elapsed in {:?} bp_double compress function() is: {:?}",comp.type_id(), duration);
     test_BP_double_compress_on_file::<f64>(TEST_FILE,100000);
-    //
     let start = Instant::now();
     comp.decode(compressed);
     let duration = start.elapsed();
