@@ -7,6 +7,7 @@ use crate::segment::Segment;
 use std::fs::File;
 use std::io::{LineWriter, Write};
 use croaring::Bitmap;
+use rust_decimal::prelude::*;
 
 /// END_MARKER is a special bit sequence used to indicate the end of the stream
 pub const EXP_MASK: u64 = 0b0111111111110000000000000000000000000000000000000000000000000000;
@@ -120,15 +121,19 @@ impl PrecisionBound {
         self.int_length = ilen;
     }
 
+    // this is for taxi dataset
     pub fn fast_fetch_components(& self, bd:f64) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
         let exp = 6 as i32;
         // let sign = bdu&FIRST_ONE;
         let mut int_part = 0u64;
         let mut dec_part = 0u64;
+        let dec_move = 64u64-self.decimal_length;
         // if exp>=0{
-            dec_part = bdu << (12 + exp) as u64;
-            int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+        //     dec_part = bdu << (12 + exp) as u64;
+        //     int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+        dec_part = bdu << 18 as u64;
+        int_part = ((bdu << 11)| FIRST_ONE )>> 57 as u64;
         // }else if exp<self.precision_exp{
         //     dec_part=0u64;
         // }else{
@@ -137,7 +142,7 @@ impl PrecisionBound {
         // int_part = int_part|sign;
         // let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
         //let signed_int = bd.trunc() as i64;
-        (int_part as i64,dec_part >> 64u64-self.decimal_length)
+        (int_part as i64,dec_part >> dec_move)
     }
 
     pub fn fetch_components(& self, bd:f64) -> (i64,u64){
@@ -146,13 +151,14 @@ impl PrecisionBound {
         let sign = bdu&FIRST_ONE;
         let mut int_part = 0u64;
         let mut dec_part = 0u64;
+        // todo: check whether we can remove those if branch
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
             // int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
         }else if exp<self.precision_exp{
             dec_part=0u64;
         }else{
-            dec_part = (((bdu << (12)) >>1) | FIRST_ONE) >> ((-exp - 1) as u64);
+            dec_part = ((bdu << (11)) | FIRST_ONE) >> ((-exp - 1) as u64);
         }
         // int_part = int_part|sign;
         // let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
@@ -461,6 +467,10 @@ fn test_getlength4decimal() {
     file.flush();
 }
 
+
+
+
+
 #[test]
 fn test_bitmap() {
     let mut rb1 = Bitmap::create();
@@ -512,4 +522,14 @@ fn test_bitmap() {
     let base = -1i32;
     let div  = base as i64;
     println!("div: {}",div)
+}
+
+#[test]
+fn test_decimal() {
+// Using an integer followed by the decimal points
+    let scaled = Decimal::new(200000002, 2);
+    let example = Decimal::from_parts(1, 1, 0, false, 0);
+
+    println!("{}",scaled.to_string());
+    println!("example: {}",example.to_string());
 }
