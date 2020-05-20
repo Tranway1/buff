@@ -34,7 +34,7 @@ use rustfft::FFTnum;
 use crate::methods::fcm_encoder::FCMCompressor;
 use std::hash::Hash;
 use std::borrow::Borrow;
-use crate::methods::prec_double::PrecisionBound;
+use crate::methods::prec_double::{PrecisionBound, FIRST_ONE};
 use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
 use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 use std::any::Any;
@@ -593,10 +593,10 @@ impl GorillaCompress {
 
             match decoder.next_val() {
                 Ok(dp) => {
-                    if i<10 {
-                        println!("{}",dp);
-                    }
-                    i += 1;
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    // i += 1;
                     expected_datapoints.push(dp);
                 },
                 Err(err) => {
@@ -742,10 +742,10 @@ impl GorillaBDCompress {
 
             match decoder.next_val() {
                 Ok(dp) => {
-                    if i<10 {
-                        println!("{}",dp);
-                    }
-                    i += 1;
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    // i += 1;
                     expected_datapoints.push(dp);
                 },
                 Err(err) => {
@@ -883,10 +883,10 @@ impl SplitDoubleCompress {
         for int_comp in int_vec{
             cur_intf = int_comp as f64;
             dec = bitpack.read(dlen as usize).unwrap();
-            if j<10{
-                println!("{}th item {}, decimal:{}",j, cur_intf + (dec as f64) / dec_scl,dec);
-            }
-            j += 1;
+            // if j<10{
+            //     println!("{}th item {}, decimal:{}",j, cur_intf + (dec as f64) / dec_scl,dec);
+            // }
+            // j += 1;
             expected_datapoints.push(cur_intf + (dec as f64) / dec_scl);
         }
         println!("Number of scan items:{}", expected_datapoints.len());
@@ -1350,6 +1350,74 @@ impl SplitBDDoubleCompress {
             // }
             // j += 1;
             expected_datapoints.push(cur_intf + cur_intf.signum() *(dec as f64) / dec_scl);
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    fn bit_decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(PREC_DELTA);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+        let target = PRED;
+        let (int_part, dec_part) = bound.fetch_components(target);
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut int_vec:Vec<i32> = Vec::new();
+
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            int_vec.push(cur as i32 + base_int);
+        }
+
+        let mut dec = 0;
+        let dec_scl:f64 = 2.0f64.powi((dlen as i32));
+        println!("Scale for decimal:{}", dec_scl);
+        let mut j = 0;
+        let mut cur_u64 = 0u64;
+        let mut sign = 0;
+        let mut sign_u64 = 0u64;
+        let mut cur_f = 0f64;
+        let mut int_abs = 0;
+        let mut leading_zero = 0;
+        let mut exp = 0;
+        let mut exp_bin = 0u64;
+        let dec_lf = (32 - dlen) as u64;
+        for int_comp in int_vec{
+            dec = bitpack.read(dlen as usize).unwrap() as u64;
+            dec = dec << dec_lf;
+            sign_u64 =unsafe { mem::transmute::<i64, u64>(int_comp as i64) };
+            sign_u64 = sign_u64 & FIRST_ONE;
+            int_abs = int_comp.abs() as u64;
+            cur_u64 = int_abs << 32;
+            cur_u64 = cur_u64 | dec;
+            leading_zero = cur_u64.leading_zeros();
+            exp = 31i32-leading_zero as i32;
+            exp_bin = (exp + 1023i32) as u64;
+            exp_bin = exp_bin << 52;
+            exp_bin = exp_bin | sign_u64;
+            cur_u64 = cur_u64 << (leading_zero+1);
+            cur_u64 = cur_u64 >> 12;
+            cur_u64 = cur_u64 | exp_bin;
+            cur_f = unsafe { mem::transmute::<u64, f64>(cur_u64) };
+            // if j<10{
+            //     println!("{}th item {}, with int part:{}, exp:{}",j, cur_f,int_abs,exp_bin);
+            // }
+            // j += 1;
+            expected_datapoints.push(cur_f );
+            cur_u64 = 0u64;
         }
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
@@ -2156,7 +2224,7 @@ fn run_splitbd_encoding_decoding() {
     println!("Time elapsed in {:?} splitbd compress function() is: {:?}",comp.type_id(), duration);
     test_splitbd_compress_on_file::<f64>(TEST_FILE);
     let start = Instant::now();
-    comp.decode(compressed);
+    comp.bit_decode(compressed);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
