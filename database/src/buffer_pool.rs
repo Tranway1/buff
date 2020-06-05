@@ -1,10 +1,9 @@
 use std::fmt::Debug;
-use serde::{Serialize,Deserialize};
+use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use rocksdb::DBVector;
 use crate::file_handler::{FileManager};
 use std::collections::vec_deque::Drain;
-use std::collections::VecDeque;
 use std::collections::hash_map::{HashMap,Entry};
 
 use crate::segment;

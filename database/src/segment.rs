@@ -1,5 +1,4 @@
 //use std::convert::TryFrom;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 use crate::buffer_pool::SegmentBuffer;
@@ -18,7 +17,6 @@ use rustfft::num_traits::Zero;
 use std::time::{Duration};
 use crate::future_signal::SignalId;
 use num::Num;
-use std::cmp::Ord;
 
 /* Currently plan to move methods into this file */
 use crate::methods;

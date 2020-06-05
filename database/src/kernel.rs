@@ -49,7 +49,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         let mut dist_comp:usize= 0;
         for i in 0..nrows_dic {
             for j in 0..nrows_dic {
-                w[[i,j]] = opt_SINKCompressed(self.dictionary.row(i),self.dictionary.row(j), self.gamma,self.coeffs,self.ffted_dictionary[i].as_ref(),self.ffted_dictionary[j].as_ref());
+                w[[i,j]] = opt_sinkcompressed(self.dictionary.row(i), self.dictionary.row(j), self.gamma, self.coeffs, self.ffted_dictionary[i].as_ref(), self.ffted_dictionary[j].as_ref());
                 dist_comp = dist_comp+1;
             }
         }
@@ -80,7 +80,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         for i in 0..nrows_x {
             //println!("{}",i);
             for j in 0..nrows_dic {
-                e[[i,j]] = opt_SINKCompressed(x.row(i),self.dictionary.row(j), self.gamma,self.coeffs,x_fft[i].as_ref(),self.ffted_dictionary[j].as_ref());
+                e[[i,j]] = opt_sinkcompressed(x.row(i), self.dictionary.row(j), self.gamma, self.coeffs, x_fft[i].as_ref(), self.ffted_dictionary[j].as_ref());
                 dist_comp = dist_comp + 1;
             }
         }
@@ -93,13 +93,13 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
     }
 
 
-    pub fn RBFdict_pre_process(&mut self){
+    pub fn rbfdict_pre_process(&mut self){
         let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
         let mut w: Array2<T> = Array2::zeros((nrows_dic, nrows_dic));
         let mut dist_comp:usize= 0;
         for i in 0..nrows_dic {
             for j in 0..nrows_dic {
-                w[[i,j]] = RBFkernel(self.dictionary.row(i),self.dictionary.row(j), 0.4);
+                w[[i,j]] = rbfkernel(self.dictionary.row(i), self.dictionary.row(j), 0.4);
                 dist_comp = dist_comp+1;
             }
         }
@@ -119,7 +119,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
     }
 
 
-    pub fn RBFrun(&self, mut x: Array2<T>){
+    pub fn rbfrun(&self, mut x: Array2<T>){
         let mut x_fft = fft_preprocess(&x,self.coeffs);
 
         let start = Instant::now();
@@ -131,7 +131,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         for i in 0..nrows_x {
             //println!("{}",i);
             for j in 0..nrows_dic {
-                e[[i,j]] = RBFkernel(x.row(i),self.dictionary.row(j), 0.4);
+                e[[i,j]] = rbfkernel(x.row(i), self.dictionary.row(j), 0.4);
                 dist_comp = dist_comp + 1;
             }
         }
@@ -167,7 +167,7 @@ impl<T> CompressionMethod<T> for Kernel<T>
         println!("vec for matrix length: {}", belesize);
         let mut x = Array2::from_shape_vec((self.batchsize,belesize/self.batchsize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
         println!("matrix shape: {} * {}", x.rows(), x.cols());
-        self.RBFrun(x);
+        self.rbfrun(x);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -175,22 +175,22 @@ impl<T> CompressionMethod<T> for Kernel<T>
     }
 }
 
-pub fn opt_SINKCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize,x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->T {
+pub fn opt_sinkcompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize, x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->T {
     /*Shift INvariant Kernel*/
-    let sim = opt_sumExpNCCcCompressed(xrow,dic_row,gamma,k,x_fft,dict_fft)/((opt_sumExpNCCcCompressed(xrow,xrow,gamma,k,x_fft,x_fft)*(opt_sumExpNCCcCompressed(dic_row,dic_row,gamma,k,dict_fft,dict_fft))).sqrt());
+    let sim = opt_sum_exp_nccc_compressed(xrow, dic_row, gamma, k, x_fft, dict_fft)/((opt_sum_exp_nccc_compressed(xrow, xrow, gamma, k, x_fft, x_fft)*(opt_sum_exp_nccc_compressed(dic_row, dic_row, gamma, k, dict_fft, dict_fft))).sqrt());
 
     sim
 }
 
-pub fn opt_sumExpNCCcCompressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize,x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>,) ->T {
-    let mut sim = opt_NCCcCompressed(xrow,dic_row,k,x_fft,dict_fft) ;
+pub fn opt_sum_exp_nccc_compressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize, x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>,) ->T {
+    let mut sim = opt_nccc_compressed(xrow, dic_row, k, x_fft, dict_fft) ;
     let exp_sim = sim.mapv(|e| (e * FromPrimitive::from_usize(gamma).unwrap()).exp());
     let sum = exp_sim.sum();
     //println!("sum:{:?}", sum);
     sum
 }
 
-pub fn opt_NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize, x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->Array1<T>{
+pub fn opt_nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize, x_fft: &Vec<Complex<T>>, dict_fft: &Vec<Complex<T>>) ->Array1<T>{
     let len = max(xrow.len(),dic_row.len());
     let fftlen = ((2*len-1) as f64).log2().ceil(); // fft length calculation
     let mut size = (fftlen.exp2()) as usize;
@@ -262,14 +262,14 @@ pub fn fft_with_leading<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Flo
 
 }
 
-pub fn SINKCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize) ->T {
+pub fn sinkcompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize) ->T {
     /*Shift INvariant Kernel*/
-    let sim = sumExpNCCcCompressed(xrow,dic_row,gamma,k)/((sumExpNCCcCompressed(xrow,xrow,gamma,k)*(sumExpNCCcCompressed(dic_row,dic_row,gamma,k))).sqrt());
+    let sim = sum_exp_nccc_compressed(xrow, dic_row, gamma, k)/((sum_exp_nccc_compressed(xrow, xrow, gamma, k)*(sum_exp_nccc_compressed(dic_row, dic_row, gamma, k))).sqrt());
 
     sim
 }
 
-pub fn RBFkernel<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, sigma: f32) ->T {
+pub fn rbfkernel<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, sigma: f32) ->T {
     /*Radial basis function kernel*/
     let diff = &xrow - &dic_row;
     //println!("diff:{:?}",diff);
@@ -279,15 +279,15 @@ pub fn RBFkernel<'a,T: FFTnum + PartialOrd +std::fmt::Debug+ Clone + Float + Ser
     sim
 }
 
-pub fn sumExpNCCcCompressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize) ->T {
-    let mut sim = NCCcCompressed(xrow,dic_row,k) ;
+pub fn sum_exp_nccc_compressed<'a,T: FFTnum + PartialOrd+std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, gamma: usize, k:usize) ->T {
+    let mut sim = nccc_compressed(xrow, dic_row, k) ;
     let exp_sim = sim.mapv(|e| (e * FromPrimitive::from_usize(gamma).unwrap()).exp());
     let sum = exp_sim.sum();
     //println!("sum:{:?}", sum);
     sum
 }
 
-pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize) ->Array1<T>{
+pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayView1<T>, dic_row: ArrayView1<T>, comp: usize) ->Array1<T>{
     let len = max(xrow.len(),dic_row.len());
     let fftlen = ((2*len-1) as f64).log2().ceil(); // fft length calculation
     let mut size = (fftlen.exp2()) as usize;

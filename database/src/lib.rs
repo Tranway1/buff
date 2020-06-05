@@ -18,10 +18,8 @@ use crate::client::{construct_normal_gen_client, read_dict};
 use crate::client::construct_gen_client;
 use std::time::SystemTime;
 use crate::client::construct_file_client;
-use crate::segment::{Segment, paa_compress, fourier_compress, FourierCompress, PAACompress};
-use rocksdb::{DBVector, DB};
-use crate::file_handler::FileManager;
-use futures::future::join_all;
+use crate::segment::{ FourierCompress, PAACompress};
+use rocksdb::{DB};
 use std::str::FromStr;
 use serde::Serialize;
 use std::fmt::Debug;
@@ -33,10 +31,9 @@ use toml_loader::{Loader};
 use std::time::{Duration,Instant};
 use tokio::timer::Interval;
 use tokio::prelude::*;
-use tokio::runtime::{Builder,Runtime};
+use tokio::runtime::{Builder};
 use futures::sync::oneshot;
 use std::sync::{Arc,Mutex};
-use rand::distributions::{Normal};
 
 mod buffer_pool;
 mod dictionary;
@@ -386,8 +383,8 @@ pub fn run_test<T: 'static>(config_file: &str)
 //	let buf2 = buf_option.clone();
 //	let comp_buf2 = compre_buf_option.clone();
 
-	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
-	//kernel.RBFdict_pre_process();
+	//let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
+	//kernel.rbfdict_pre_process();
 
 //    let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
 //	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
@@ -693,7 +690,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 					let dict = match params.lookup("dict") {
 						Some(value) => {
 							let dict_str = value.as_str().expect("The file dictionary file must be privded as a string");
-							let mut dic = read_dict::<T>(dict_str,delim);
+							let dic = read_dict::<T>(dict_str,delim);
 							println!("dictionary shape: {} * {}", dic.rows(), dic.cols());
 							Some(dic)
 						},
@@ -709,7 +706,6 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 								Some(skip_val) => skip_val.as_integer().expect("The skip value must be provided as an integer") as usize,
 								None => 0,
 							};
-							;
 							Box::new(construct_file_client_skip_newline::<T>(path, skip_val, delim, amount, run_period, frequency).expect("Client could not be properly produced"))
 						}
 						"DeserializeDelim" => Box::new(construct_file_client::<T>(path, delim as u8, amount, run_period, frequency).expect("Client could not be properly produced")),
@@ -732,7 +728,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 						}
 					}
 					let params = client_config.lookup("params").expect("The generator client type requires a params table");
-					let client: Box<(Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
+					let client: Box<(dyn Stream<Item=T,Error=()> + Sync + Send)> = match client_config.lookup("gen_type")
 						.expect("The gen client must be provided a gen type field")
 						.as_str()
 						.expect("The gen type must be provided as a string")
@@ -779,7 +775,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 
 
 	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
-	kernel.RBFdict_pre_process();
+	kernel.rbfdict_pre_process();
 
 	//let mut comps:Vec<CompressionDemon<_,DB,_>> = Vec::new();
 	let batch = 20;
@@ -906,6 +902,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 //		println!("segment commpressed: {}", compress_demon2.get_processed() );
 //	});
 
+	// wait the future to finish.
 	for sh in spawn_handles {
 		match sh.wait() {
 			Ok(Some(x)) => println!("Produced a timestamp: {:?}", x),
@@ -917,6 +914,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 	//handle1.join().unwrap();
 	//handle2.join().unwrap();
 
+	// Wait until the runtime becomes idle and shut it down.
 	match rt.shutdown_on_idle().wait() {
 		Ok(_) => (),
 		Err(_) => panic!("Failed to shutdown properly"),

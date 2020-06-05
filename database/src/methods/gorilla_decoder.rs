@@ -7,7 +7,7 @@ use tsz::{DataPoint, Bit};
 use tsz::stream::Read;
 use tsz::decode::{Decode, Error};
 use crate::methods::gorilla_encoder::{END_MARKER, END_MARKER_LEN};
-use rustfft::num_traits::real::Real;
+
 
 // this is the code revised from tsz gorilla library.
 //      by Chunwei Liu

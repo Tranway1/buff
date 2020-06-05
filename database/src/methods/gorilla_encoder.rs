@@ -2,7 +2,7 @@ use std::mem;
 
 
 use tsz::stream::Write;
-use tsz::{DataPoint, Bit};
+use tsz::{Bit};
 
 // this is the code revised from tsz gorilla library.
 //      by Chunwei Liu

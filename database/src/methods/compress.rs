@@ -38,12 +38,10 @@ use crate::methods::prec_double::{PrecisionBound, FIRST_ONE};
 use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
 use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 use std::any::Any;
-use rustfft::num_traits::float::FloatCore;
 use std::collections::HashMap;
-use rustfft::num_traits::real::Real;
 
 pub const SCALE: f64 = 1.0f64;
-pub const PRED: f64 = 39.75f64;
+pub const PRED: f64 = 9.15f64;
 pub const PRECISION:i32 = 5;
 pub const PREC_DELTA:f64 = 0.000005f64;
 // pub const TEST_FILE:&str = "../taxi/dropoff_latitude-fulltaxi-1k.csv";
@@ -304,7 +302,7 @@ impl GZipCompress {
     }
 
     // Compress a sample string and print it after transformation.
-    fn encode<'a,T>(&self, seg: &mut Segment<T>)
+    fn encode<'a,T>(&self, seg: &mut Segment<T>)-> Vec<u8>
         where T: Serialize + Deserialize<'a>{
         let mut e = GzEncoder::new(Vec::new(), Compression::best());
         let origin_bin =seg.convert_to_bytes().unwrap();
@@ -316,6 +314,7 @@ impl GZipCompress {
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
         print!("{}",ratio);
+        bytes
     }
 
     // Uncompresses a Gz Encoded vector of bytes and returns a string or error
@@ -325,6 +324,45 @@ impl GZipCompress {
         let mut s = String::new();
         gz.read_to_string(&mut s)?;
         Ok(s)
+    }
+
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64> {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        info!("size read:{}, original size:{}", ct, s.len());
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {expected_datapoints = new_seg.get_data().clone()},
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+    fn range_filter(&self, bytes: Vec<u8>) -> Vec<f64> {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        info!("size read:{}, original size:{}", ct, s.len());
+        let expected_datapoints:Vec<f64> = Vec::new();
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if (*e )>PRED{
+                        res.add(i);
+                        i+=1;
+                    }
+
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
+        expected_datapoints
     }
 }
 
@@ -490,7 +528,7 @@ impl SnappyCompress {
     }
 
     // Compress a sample string and print it after transformation.
-    fn encode<'a,T>(&self, seg: &mut Segment<T>)
+    fn encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
         where T: Serialize + Deserialize<'a>{
         let origin_bin =seg.convert_to_bytes().unwrap();
         info!("original size:{}", origin_bin.len());
@@ -499,6 +537,7 @@ impl SnappyCompress {
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
         print!("{}",ratio);
+        bytes
     }
 
     // Uncompresses a snappy Encoded vector of bytes and returns a string or error
@@ -507,6 +546,42 @@ impl SnappyCompress {
         let mut snappy = decompress(bytes.as_slice());
         let mut s = snappy.unwrap();
         s
+    }
+
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64> {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {expected_datapoints = new_seg.get_data().clone()},
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    fn range_filter(&self, bytes: Vec<u8>) -> Vec<f64> {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                    {
+                        if (*e )>PRED{
+                            res.add(i);
+                            i+=1;
+                    }
+
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
+        expected_datapoints
     }
 }
 
@@ -632,7 +707,7 @@ impl GorillaCompress {
                     // if i<10 {
                     //     println!("{}",dp);
                     // }
-                    if (dp>PRED){
+                    if dp>PRED {
                         res.add(i);
                     }
                     i+=1;
@@ -781,7 +856,7 @@ impl GorillaBDCompress {
                     // if i<10 {
                     //     println!("{}",dp);
                     // }
-                    if (dp>PRED){
+                    if dp>PRED {
                         res.add(i);
                     }
                     i+=1;
@@ -818,7 +893,7 @@ impl<'a, T> CompressionMethod<T> for GorillaBDCompress
             self.encode(seg);
         }
         let duration = start.elapsed();
-        info!("Time elapsed in Gorilla function() is: {:?}", duration);
+        info!("Time elapsed in GorillaBD function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -1181,10 +1256,10 @@ impl SplitBDDoubleCompress {
 
         for val in seg.get_data(){
             let v = (*val).into();
-            if (v<min){
+            if v<min {
                 min = v;
             }
-            if (v>max){
+            if v>max {
                 max = v;
             }
             bd_vec.push(v);
@@ -1338,7 +1413,7 @@ impl SplitBDDoubleCompress {
         }
 
         let mut dec = 0;
-        let dec_scl:f64 = 2.0f64.powi((dlen as i32));
+        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
         println!("Scale for decimal:{}", dec_scl);
         let mut j = 0;
         let mut cur_intf = 0f64;
@@ -1383,7 +1458,7 @@ impl SplitBDDoubleCompress {
         }
 
         let mut dec = 0;
-        let dec_scl:f64 = 2.0f64.powi((dlen as i32));
+        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
         println!("Scale for decimal:{}", dec_scl);
         let mut j = 0;
         let mut cur_u64 = 0u64;
@@ -1517,7 +1592,7 @@ impl<'a, T> CompressionMethod<T> for SplitBDDoubleCompress
             self.offset_encode(seg);
         }
         let duration = start.elapsed();
-        info!("Time elapsed in Gorilla function() is: {:?}", duration);
+        info!("Time elapsed in splitBD function() is: {:?}", duration);
     }
 
     fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
@@ -1544,7 +1619,7 @@ pub fn test_paa_compress_on_file<'a,T>(file:&str)
 }
 
 pub fn test_paa_compress_on_int_file(file:&str,scl:i32){
-    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);;
+    let file_iter = construct_file_iterator_int_signed(file, 1, ',',scl);
     let file_vec: Vec<i32> = file_iter.unwrap().collect();
     let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
     let start = Instant::now();
@@ -1800,7 +1875,7 @@ pub fn test_grilla_compress_on_int_file(file: &str, scl:i32) {
     info!("Time elapsed in grilla compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
 //    let org_size = file_vec.len()*4;
-    let org_size = file_vec.len() * (mem::size_of::<i32>());;
+    let org_size = file_vec.len() * (mem::size_of::<i32>());
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -1839,7 +1914,7 @@ pub fn test_offsetgrilla_compress_on_int_file(file: &str, scl:i32) {
     info!("Time elapsed in grilla compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
 //    let org_size = file_vec.len()*4;
-    let org_size = file_vec.len() * (mem::size_of::<i32>());;
+    let org_size = file_vec.len() * (mem::size_of::<i32>());
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
 }
@@ -2266,9 +2341,50 @@ fn run_gorilla_encoding_decoding() {
     let duration = start.elapsed();
     println!("Time elapsed in {:?} gorilla compress function() is: {:?}",comp.type_id(), duration);
     test_grilla_compress_on_file::<f64>(TEST_FILE);
-    let start = Instant::now();
+    let start1 = Instant::now();
     comp.decode(compressed);
-    let duration = start.elapsed();
-    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+    let duration1 = start1.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration1);
 }
 
+#[test]
+fn run_gzip_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+    let file_iter = construct_file_iterator_skip_newline::<f64>(TEST_FILE, 1, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = GZipCompress::new(10,10);
+    let start = Instant::now();
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} gzip compress function() is: {:?}",comp.type_id(), duration);
+    //test_grilla_compress_on_file::<f64>(TEST_FILE);
+    let start1 = Instant::now();
+    comp.range_filter(compressed);
+    let duration1 = start1.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration1);
+}
+
+#[test]
+fn run_snappy_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+    let file_iter = construct_file_iterator_skip_newline::<f64>(TEST_FILE, 1, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = SnappyCompress::new(10,10);
+    let start = Instant::now();
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} snappy compress function() is: {:?}",comp.type_id(), duration);
+    //test_grilla_compress_on_file::<f64>(TEST_FILE);
+    let start1 = Instant::now();
+    comp.range_filter(compressed);
+    let duration1 = start1.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration1);
+}

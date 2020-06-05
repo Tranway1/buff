@@ -40,7 +40,7 @@ impl<'a,T: FFTnum+ PartialOrd+ Clone + Float + Serialize + Deserialize<'a>> LCCE
 
         for i in 0..nrows_x {
             for j in 0..nrows_dic {
-                let cc_seq =  NCCcCompressed(self.x.row_mut(i),self.dictionary.row_mut(j),self.compression);
+                let cc_seq =  nccc_compressed(self.x.row_mut(i), self.dictionary.row_mut(j), self.compression);
                 let value = T::one()-*cc_seq.to_vec().iter().fold(None, |min, x| match min {
                     None => Some(x),
                     Some(y) => Some(if x > y { x } else { y }),
@@ -57,7 +57,7 @@ impl<'a,T: FFTnum+ PartialOrd+ Clone + Float + Serialize + Deserialize<'a>> LCCE
 }
 
 
-pub fn NCCcCompressed<'a,T: FFTnum + PartialOrd + Clone + Float + Serialize + Deserialize<'a>>( xrow: ArrayViewMut1<T>, dic_row: ArrayViewMut1<T>, comp: usize) ->Array1<T>{
+pub fn nccc_compressed<'a,T: FFTnum + PartialOrd + Clone + Float + Serialize + Deserialize<'a>>(xrow: ArrayViewMut1<T>, dic_row: ArrayViewMut1<T>, comp: usize) ->Array1<T>{
     let len = max(xrow.len(),dic_row.len());
     let fftlen = len; // fft length calculation
     let size = len;

@@ -1,4 +1,4 @@
-use bitpacking::{BitPacker, BitPacker4x};
+use bitpacking::{BitPacker4x};
 use log::{info, trace, warn};
 use futures::future::err;
 use num::Num;
@@ -6,7 +6,6 @@ use std::mem;
 use crate::client::construct_file_iterator_skip_newline;
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
-use rustfft::num_traits::float::FloatCore;
 
 pub const MAX_BITS: usize = 32;
 const BYTE_BITS: usize = 8;

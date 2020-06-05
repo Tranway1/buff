@@ -5,6 +5,7 @@ pub mod gorilla_decoder;
 pub mod bit_packing;
 pub mod fcm_encoder;
 pub mod prec_double;
+pub mod parquet;
 use std::fmt;
 use crate::dictionary::{DictionaryId};
 
