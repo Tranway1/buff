@@ -40,6 +40,7 @@ mod dictionary;
 mod file_handler;
 mod segment;
 pub mod methods;
+pub mod simd;
 mod future_signal;
 mod client;
 mod query;
