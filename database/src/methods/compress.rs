@@ -27,7 +27,7 @@ use std::time::{SystemTime, Instant};
 use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
 use crate::methods::Methods::Fourier;
 use self::bitpacking::BitPacker1x;
-use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack, bp_double_encoder};
+use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack, bp_double_encoder, sprintz_double_encoder, unzigzag};
 use std::str::FromStr;
 use num::{FromPrimitive, Num};
 use rustfft::FFTnum;
@@ -42,7 +42,7 @@ use std::collections::HashMap;
 use packed_simd::{u8x8,u8x16};
 
 pub const SCALE: f64 = 1.0f64;
-pub const PRED: f64 = 1.15f64;
+pub const PRED: f64 = 9.15f64;
 pub const PRECISION:i32 = 5;
 pub const PREC_DELTA:f64 = 0.000005f64;
 // pub const TEST_FILE:&str = "../taxi/dropoff_latitude-fulltaxi-1k.csv";
@@ -1169,6 +1169,116 @@ impl<'a, T> CompressionMethod<T> for BPDoubleCompress
     }
 }
 
+
+#[derive(Clone)]
+pub struct SprintzDoubleCompress {
+    chunksize: usize,
+    batchsize: usize,
+    scale: usize
+}
+
+impl SprintzDoubleCompress {
+    pub fn new(chunksize: usize, batchsize: usize, scale: usize) -> Self {
+        SprintzDoubleCompress { chunksize, batchsize, scale }
+    }
+
+    fn encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
+        where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+        let comp = sprintz_double_encoder(seg.get_data().as_slice(),self.scale);
+        comp
+    }
+
+    fn decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        let target = PRED;
+        let adjust_target = ((target*scl).ceil() as i32 -base_int) as u32;
+        let base_f64 = base_int as f64;
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut pre = base_int;
+        let mut delta = 0i32;
+        let mut cur_int = 0i32;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            delta = unzigzag(cur);
+            cur_int = pre+delta;
+            // if i<10{
+            //     println!("{}th value: {}",i,(cur_int as f64)/scl);
+            // }
+            expected_datapoints.push((cur_int as f64)/scl);
+            pre = cur_int;
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    fn range_filter(&self, bytes: Vec<u8>) {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        let target = PRED;
+        let adjust_target = (target*self.scale as f64).ceil() as i32;
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut pre = base_int;
+        let mut delta = 0i32;
+        let mut cur_int = 0i32;
+        let mut res = Bitmap::create();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            delta = unzigzag(cur);
+            cur_int = pre+delta;
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur_int>adjust_target{
+                res.add(i);
+            }
+            pre = cur_int;
+
+        }
+        res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
+    }
+}
+
+impl<'a, T> CompressionMethod<T> for SprintzDoubleCompress
+    where T: Serialize + Clone+ Copy+Into<f64>+ Deserialize<'a>{
+    fn get_segments(&self) {
+        unimplemented!()
+    }
+
+    fn get_batch(&self) -> usize {
+        self.batchsize
+    }
+
+    fn run_compress<'b>(&self, segs: &mut Vec<Segment<T>>) {
+        let start = Instant::now();
+        for seg in segs {
+            self.encode(seg);
+        }
+
+        let duration = start.elapsed();
+//        println!("Time elapsed in sprintz function() is: {:?}", duration);
+    }
+
+    fn run_decompress(&self, segs: &mut Vec<Segment<T>>) {
+        unimplemented!()
+    }
+}
+
 #[derive(Clone)]
 pub struct SplitBDDoubleCompress {
     chunksize: usize,
@@ -2039,7 +2149,24 @@ pub fn test_BP_double_compress_on_file<'a,T>(file: &str,scl:i32)
     let comp = BPDoubleCompress::new(10, 10, scl as usize);
     let compressed = comp.encode(&mut seg);
     let duration = start.elapsed();
-    info!("Time elapsed in split compress function() is: {:?}", duration);
+    info!("Time elapsed in bp double compress function() is: {:?}", duration);
+    let org_size = file_vec.len()*((mem::size_of::<T>()) as usize);
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
+    println!(",    {}", throughput);
+}
+
+pub fn test_sprintz_double_compress_on_file<'a,T>(file: &str,scl:i32)
+    where T: FromStr + Serialize + Clone +Copy+Into<f64> + Num+PartialOrd+ Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    //println!("integer vector: {:?}", file_vec);
+    info!("integer vector size: {}", file_vec.len());
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let start = Instant::now();
+    let comp = SprintzDoubleCompress::new(10, 10, scl as usize);
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    info!("Time elapsed in sprintz compress function() is: {:?}", duration);
     let org_size = file_vec.len()*((mem::size_of::<T>()) as usize);
     let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
     println!(",    {}", throughput);
@@ -2366,6 +2493,27 @@ fn run_bp_double_encoding_decoding() {
     let duration = start.elapsed();
     println!("Time elapsed in {:?} bp_double compress function() is: {:?}",comp.type_id(), duration);
     test_BP_double_compress_on_file::<f64>(TEST_FILE,100000);
+    let start = Instant::now();
+    comp.decode(compressed);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
+}
+
+#[test]
+fn run_sprintz_double_encoding_decoding() {
+    let args: Vec<String> = env::args().collect();
+    println!("Arguments: {:?}", args);
+    let file_iter = construct_file_iterator_skip_newline::<f64>(TEST_FILE, 1, ',');
+    let file_vec: Vec<f64>= file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let comp = SprintzDoubleCompress::new(10,10,100000);
+    let start = Instant::now();
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} sprintz_double compress function() is: {:?}",comp.type_id(), duration);
+    test_sprintz_double_compress_on_file::<f64>(TEST_FILE,100000);
     let start = Instant::now();
     comp.decode(compressed);
     let duration = start.elapsed();

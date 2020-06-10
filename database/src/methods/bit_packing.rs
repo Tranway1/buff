@@ -260,6 +260,46 @@ pub(crate) fn delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
     (min, bits, vec)
 }
 
+/*
+zigzag encoding: Maps negative values to positive values while going back and
+  forth (0 = 0, -1 = 1, 1 = 2, -2 = 3, 2 = 4, -3 = 5, 3 = 6 ...)
+ */
+#[inline]
+pub fn zigzag(origin: i32) -> u32{
+    let zzu = (origin << 1) ^ (origin >> 31);
+    let orgu= unsafe { mem::transmute::<i32, u32>(zzu) };
+    orgu
+}
+
+#[inline]
+pub fn unzigzag(origin: u32) -> i32{
+    let zzu = (origin >> 1) as i32 ^ -((origin & 1) as i32);
+    zzu
+}
+
+// delta calculation for sprintz
+pub(crate) fn zigzag_delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
+    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
+    let mut vec = Vec::new();
+    let mut xor:u32 = 0;
+    let mut delta = 0i32;
+    let mut zz = 0u32;
+    let base = mydata[0];
+    let mut pre = mydata[0];
+
+    for &b in mydata {
+        delta = b - pre;
+        zz = zigzag(delta);
+        vec.push(zz);
+        xor = xor | zz;
+        pre = b;
+    }
+    let lead = xor.leading_zeros();
+    let bits:u8 = (32 -lead) as u8;
+    info!("10th vec: {},{},{},{}", vec[0],vec[1],vec[2],vec[3]);
+    (base, bits, vec)
+}
+
 pub(crate) fn delta_64num_bits(mydata: &[i64]) -> (u8,Vec<u64>){
     info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
@@ -464,6 +504,35 @@ pub(crate) fn bp_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     vec
 }
 
+pub(crate) fn sprintz_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
+    where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+    let ldata: Vec<i32> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i32).collect::<Vec<i32>>();
+    let (base, num_bits, delta_vec) = zigzag_delta_num_bits(ldata.as_ref());
+    println!("base int:{}",base);
+    info!("Number of bits: {}", num_bits);
+    info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
+    let ubase_int = unsafe { mem::transmute::<i32, u32>(base) };
+    let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+    bitpack_vec.write(ubase_int,32);
+    bitpack_vec.write(delta_vec.len() as u32, 32);
+    bitpack_vec.write(num_bits as u32, 8);
+    let mut i =0 ;
+    for &b in delta_vec.as_slice() {
+        // if i<10{
+        //     println!("{}th value: {}",i,b);
+        // }
+        // i+=1;
+        bitpack_vec.write(b, num_bits as usize).unwrap();
+
+    }
+    let vec = bitpack_vec.into_vec();
+    info!("Length of compressed data: {}", vec.len());
+    let ratio= vec.len() as f32 / (mydata.len() as f32*mem::size_of::<T>() as f32);
+    print!("{}",ratio);
+    vec
+}
+
+
 
 pub(crate) fn split_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
@@ -608,6 +677,16 @@ fn test_xor_f64() {
     }
 }
 
+#[test]
+fn test_zigzag(){
+    let org =  0i32;
+    println!("zigzag:{}",unzigzag(1));
+    assert_eq!(unzigzag(zigzag(org)),org);
+    assert_eq!(unzigzag(zigzag(1)),1);
+    assert_eq!(unzigzag(zigzag(-1)),-1);
+    assert_eq!(unzigzag(zigzag(100)),100);
+    assert_eq!(unzigzag(zigzag(-100)),-100);
+}
 
 #[test]
 fn test_xor_on_file() {
