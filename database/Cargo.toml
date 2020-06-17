@@ -12,6 +12,9 @@ path = "src/main.rs"
 name = "compress"
 path = "src/methods/main.rs"
 
+[[bin]]
+name = "comp_profiler"
+path = "src/compress/main.rs"
 
 [dependencies]
 num = "0.2"

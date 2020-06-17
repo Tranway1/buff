@@ -19,7 +19,7 @@ use std::time::Instant;
 use parquet::record::RowAccessor;
 
 pub const USE_DICT: bool = false;
-pub const DICTPAGE_LIM: usize = 2000000;
+pub const DICTPAGE_LIM: usize = 2000000000;
 #[test]
 fn test_parquet_write_scan(){
     let path = Path::new("target/debug/examples/sample.parquet");

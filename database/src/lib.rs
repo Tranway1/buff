@@ -44,6 +44,7 @@ pub mod simd;
 mod future_signal;
 mod client;
 mod query;
+pub mod compress;
 mod tree;
 mod stats;
 mod btree;

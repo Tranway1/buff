@@ -231,6 +231,16 @@ pub fn to_u32(slice: &[u8]) -> u32 {
     slice.iter().rev().fold(0, |acc, &b| acc*2 + b as u32)
 }
 
+pub fn get_precision_bound(precision: i32) -> f64{
+    let mut str = String::from("0.");
+    for pos in 0..precision{
+        str.push('0');
+    }
+    str.push_str("49");
+    let error = str.parse().unwrap();
+    error
+}
+
 
 
 
