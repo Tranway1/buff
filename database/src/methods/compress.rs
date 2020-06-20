@@ -1367,7 +1367,7 @@ impl SplitBDDoubleCompress {
         println!("precision {}, precision delta:{}", prec, prec_delta);
 
         let mut bound = PrecisionBound::new(prec_delta);
-        let start = Instant::now();
+        // let start = Instant::now();
         let mut min = std::f64::MAX;
         let mut max = std::f64::MIN;
 
@@ -1401,9 +1401,9 @@ impl SplitBDDoubleCompress {
         }else {
             cal_int_length = delta.log2().ceil();
         }
-        let duration = start.elapsed();
-        println!("Time elapsed in bound double function() is: {:?}", duration);
-        let start1 = Instant::now();
+        // let duration = start.elapsed();
+        // println!("Time elapsed in bound double function() is: {:?}", duration);
+        // let start1 = Instant::now();
         let (int_len,dec_len) = (cal_int_length as u64,*(PRECISION_MAP.get(&prec).unwrap()) as u64);
         bound.set_length(int_len,dec_len);
         let ilen = int_len as usize;
@@ -1427,15 +1427,15 @@ impl SplitBDDoubleCompress {
             bitpack_vec.write((int_part-base_int64) as u32, ilen).unwrap();
             dec_vec.push(dec_part as u32);
         }
-        let duration1 = start1.elapsed();
-        println!("Time elapsed in dividing double function() is: {:?}", duration1);
+        // let duration1 = start1.elapsed();
+        // println!("Time elapsed in dividing double function() is: {:?}", duration1);
 
         let mut j= 0;
         for d in dec_vec {
             // j += 1;
             bitpack_vec.write(d, dlen).unwrap();
         }
-        println!("total number of dec is: {}", j);
+        // println!("total number of dec is: {}", j);
         let vec = bitpack_vec.into_vec();
 
         let origin = t * mem::size_of::<T>() as u32;
@@ -1582,8 +1582,8 @@ impl SplitBDDoubleCompress {
         }
 
         let mut dec = 0;
-        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
-        println!("Scale for decimal:{}", dec_scl);
+        // let dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        // println!("Scale for decimal:{}", dec_scl);
         let mut j = 0;
         let mut cur_u64 = 0u64;
         let mut sign = 0;
@@ -1647,7 +1647,7 @@ impl SplitBDDoubleCompress {
         let dec_target = dec_part as u32;
         println!("target value with integer part:{}, decimal part:{}",int_target,dec_target);
 
-        let start = Instant::now();
+        // let start = Instant::now();
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
             // if i<10{
@@ -1662,11 +1662,11 @@ impl SplitBDDoubleCompress {
         }
         rb1.run_optimize();
         res.run_optimize();
-        let duration = start.elapsed();
-        println!("Time elapsed in splitBD filtering int part is: {:?}", duration);
+        // let duration = start.elapsed();
+        // println!("Time elapsed in splitBD filtering int part is: {:?}", duration);
         println!("Number of qualified int items:{}", res.cardinality());
 
-        let start = Instant::now();
+        // let start = Instant::now();
         let mut iterator = rb1.iter();
         // check the decimal part
         let mut it = iterator.next();
@@ -1704,8 +1704,8 @@ impl SplitBDDoubleCompress {
             it = iterator.next();
             dec_pre=dec_cur;
         }
-        let duration = start.elapsed();
-        println!("Time elapsed in splitBD filtering fraction part is: {:?}", duration);
+        // let duration = start.elapsed();
+        // println!("Time elapsed in splitBD filtering fraction part is: {:?}", duration);
         println!("Number of qualified items:{}", res.cardinality());
     }
 

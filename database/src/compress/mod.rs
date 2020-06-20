@@ -131,7 +131,7 @@ pub fn run_splitbd_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     println!("Time elapsed in splitbd compress function() is: {:?}", duration1);
 
     let start2 = Instant::now();
-    comp.bit_decode(compressed);
+    comp.decode(compressed);
     let duration2 = start2.elapsed();
     println!("Time elapsed in splitbd decompress function() is: {:?}", duration2);
 
@@ -272,13 +272,26 @@ pub fn run_snappy_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
 }
 
 
-pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, comp:&str){
+pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
     let path = Path::new("target/debug/examples/sample.parquet");
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
     let file_vec: Vec<f64> = file_iter.unwrap()
         .map(|x| (x*SCALE))
         .collect();
-    let comp = Compression::GZIP;
+    let org_size=file_vec.len()*8;
+    let mut comp = Compression::UNCOMPRESSED;
+    let mut dictpg_lim:usize = 20;
+    let mut use_dict = false;
+    match enc {
+        "dict" => {
+            use_dict = true;
+            dictpg_lim = 200000000;
+        },
+        "plain" => {},
+        "pqgzip" => {comp=Compression::GZIP},
+        "pqsnappy" => {comp=Compression::SNAPPY},
+        _ => {panic!("Compression not supported by parquet.")}
+    }
     // profile encoding
     let start = Instant::now();
     let message_type = "
@@ -290,8 +303,8 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, comp:&str){
     let props = Rc::new(WriterProperties::builder()
         .set_encoding(Encoding::PLAIN)
         .set_compression(comp)
-        .set_dictionary_pagesize_limit(DICTPAGE_LIM) // change max page size to avoid fallback to plain and make sure dict is used.
-        .set_dictionary_enabled(USE_DICT)
+        .set_dictionary_pagesize_limit(dictpg_lim) // change max page size to avoid fallback to plain and make sure dict is used.
+        .set_dictionary_enabled(use_dict)
         .build());
     let file = fs::File::create(&path).unwrap();
     let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
@@ -315,7 +328,8 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, comp:&str){
 
 
     let bytes = fs::read(&path).unwrap();
-    println!("file size: {}",bytes.len());
+    let comp_size= bytes.len();
+    println!("file size: {}",comp_size);
     //println!("read: {:?}",str::from_utf8(&bytes[0..4]).unwrap());
     let file = File::open(&path).unwrap();
 
@@ -327,21 +341,39 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, comp:&str){
     let colmeta =  rg_meta.column(0).encodings();
     println!("column encodings: {:?}", colmeta.as_slice());
     let mut iter = reader.get_row_iter(None).unwrap();
+    while let Some(record) = iter.next() {
+        expected_datapoints.push( record.get_double(0).unwrap());
+    }
+
+    let duration1 = start1.elapsed();
+    let num = expected_datapoints.len();
+    println!("Time elapsed in parquet scan {} items is: {:?}",num, duration1);
+
+    let file2 = File::open(&path).unwrap();
+
+    // profile decoding
+    let start2 = Instant::now();
+    let reader = SerializedFileReader::new(file2).unwrap();
+    let rg_meta = reader.metadata().row_group(0).clone();
+    let colmeta =  rg_meta.column(0).encodings();
+    println!("column encodings: {:?}", colmeta.as_slice());
+    let mut iter = reader.get_row_iter(None).unwrap();
     let mut i = 0;
     let mut res = Bitmap::create();
     while let Some(record) = iter.next() {
-        // if (i<10){
-        //     println!("{}", record.get_double(0).unwrap());
-        // }
         if (record.get_double(0).unwrap()>pred){
             res.add(i);
         }
         i+=1;
     }
     res.run_optimize();
-    let duration1 = start1.elapsed();
+    let duration2 = start2.elapsed();
     println!("Number of qualified items:{}", res.cardinality());
-    let num = expected_datapoints.len();
-    println!("Time elapsed in parquet filter {} items is: {:?}",num, duration1);
-
+    println!("Time elapsed in parquet filter is: {:?}",duration2);
+    println!("Performance:{},{},{},{},{},{},{}", test_file, scl, pred,
+             comp_size as f64/ org_size as f64,
+             1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0
+    )
 }

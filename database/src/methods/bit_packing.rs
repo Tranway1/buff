@@ -365,17 +365,18 @@ pub(crate) fn split_64num_bits(mydata: &[i64], scl: usize) -> (i32, u8,Vec<u64>,
     let mut delta = 0u64;
     let mut min = 0i64;
     let minValue = mydata.iter().min();
-    //let maxValue = mydata.iter().max();
-    //println!("min:{}, max:{}",minValue.unwrap(),maxValue.unwrap());
+    let maxValue = mydata.iter().max();
+    println!("min:{}, max:{}",minValue.unwrap(),maxValue.unwrap());
     info!("min value:{}",minValue.unwrap());
     match minValue {
         Some(&val) => min = val,
         None => panic!("empty"),
     }
     let mut min_int = min/scl as i64;
-    if min_int < 0{
+    if min < 0{
         min_int -= 1;
     }
+    println!("min int: {}", min_int);
     min = min_int * scl as i64;
 
 
@@ -481,7 +482,7 @@ pub(crate) fn bp_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     let ldata: Vec<i32> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i32).collect::<Vec<i32>>();
     let (base, num_bits, delta_vec) = delta_num_bits(ldata.as_ref());
     println!("base int:{}",base);
-    info!("Number of bits: {}", num_bits);
+    println!("Number of bits: {}", num_bits);
     info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
     let ubase_int = unsafe { mem::transmute::<i32, u32>(base) };
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
@@ -536,7 +537,7 @@ pub(crate) fn sprintz_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
 
 pub(crate) fn split_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
-    let ldata: Vec<i64> = mydata.into_iter().map(|x| ((*x).into()* scl as f64).ceil() as i64).collect::<Vec<i64>>();
+    let ldata: Vec<i64> = mydata.into_iter().map(|x| ((*x).into()* scl as f64) as i64).collect::<Vec<i64>>();
     let (base_int, int_bits, int_vec,dec_bits,dec_vec) = split_64num_bits(ldata.as_slice(),scl);
     println!("base int:{}",base_int);
     println!("Number of int bits: {}; number of decimal bits: {}", int_bits, dec_bits);

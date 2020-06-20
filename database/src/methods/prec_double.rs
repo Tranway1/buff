@@ -62,7 +62,6 @@ impl PrecisionBound {
             // find the first bit where is bounded
             while !bounded{
                 if self.position==0 {
-                    info!("full precision.");
                     break;
                 }
                 self.position-=1;
