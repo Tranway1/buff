@@ -120,19 +120,18 @@ impl PrecisionBound {
         self.int_length = ilen;
     }
 
-    // this is for taxi dataset
-    pub fn fast_fetch_components(& self, bd:f64) -> (i64,u64){
+    // this is for dataset with same power of 2, power>1
+    pub fn fast_fetch_components_large(& self, bd:f64,exp:i32) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
-        let exp = 6 as i32;
         // let sign = bdu&FIRST_ONE;
         let mut int_part = 0u64;
         let mut dec_part = 0u64;
         let dec_move = 64u64-self.decimal_length;
         // if exp>=0{
-        //     dec_part = bdu << (12 + exp) as u64;
-        //     int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
-        dec_part = bdu << 18 as u64;
-        int_part = ((bdu << 11)| FIRST_ONE )>> 57 as u64;
+        dec_part = bdu << (12 + exp) as u64;
+        int_part = ((bdu << 11)| FIRST_ONE )>> (63-exp) as u64;
+        // dec_part = bdu << 18 as u64;
+        // int_part = ((bdu << 11)| FIRST_ONE )>> 57 as u64;
         // }else if exp<self.precision_exp{
         //     dec_part=0u64;
         // }else{
@@ -153,16 +152,18 @@ impl PrecisionBound {
         // todo: check whether we can remove those if branch
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
-            // int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+            int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
         }else if exp<self.precision_exp{
             dec_part=0u64;
         }else{
             dec_part = ((bdu << (11)) | FIRST_ONE) >> ((-exp - 1) as u64);
         }
-        // int_part = int_part|sign;
-        // let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
-        let signed_int = bd.trunc() as i64;
-        (signed_int,dec_part >> 64u64-self.decimal_length)
+        if sign!=0{
+            int_part = !(int_part-1);
+        }
+        let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
+        //let signed_int = bd.trunc() as i64;
+        (signed_int, dec_part >> 64u64-self.decimal_length)
     }
 
     pub fn finer(&self, input:f64) -> Vec<u8>{
