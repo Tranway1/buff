@@ -31,6 +31,7 @@ impl PrecisionBound {
         e
     }
 
+
     pub fn precision_bound(&mut self, orig: f64)-> f64{
         let a = 0u64;
         let mut mask = !a;
@@ -115,6 +116,7 @@ impl PrecisionBound {
         (self.int_length, self.decimal_length)
     }
 
+    #[inline]
     pub fn set_length(&mut self, ilen:u64, dlen:u64){
         self.decimal_length = dlen;
         self.int_length = ilen;
@@ -218,7 +220,7 @@ impl PrecisionBound {
         vec
     }
 
-
+    #[inline]
     pub fn is_bounded(&self, a:f64, b:f64)-> bool{
         let delta =  a-b;
         if delta.abs()<self.precision{

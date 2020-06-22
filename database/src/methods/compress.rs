@@ -40,6 +40,7 @@ use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 use std::any::Any;
 use std::collections::HashMap;
 use packed_simd::{u8x8,u8x16,u8x32};
+use rustfft::num_traits::real::Real;
 
 pub const TYPE_LEN:usize = 8usize;
 pub const SCALE: f64 = 1.0f64;
@@ -1351,14 +1352,12 @@ impl SplitBDDoubleCompress {
         let ratio = vec.len() as f64 /origin as f64;
         print!("{}",ratio);
         vec
-        //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
-        //println!("{}", decode_reader(bytes).unwrap());
     }
 
     pub(crate) fn offset_encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
         where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
 
-        let mut bd_vec = Vec::new();
+        let mut int_vec = Vec::new();
         let mut dec_vec = Vec::new();
 
         let mut t:u32 = seg.get_data().len() as u32;
@@ -1367,80 +1366,56 @@ impl SplitBDDoubleCompress {
         println!("precision {}, precision delta:{}", prec, prec_delta);
 
         let mut bound = PrecisionBound::new(prec_delta);
-        let start = Instant::now();
-        let mut min = std::f64::MAX;
-        let mut max = std::f64::MIN;
+        let start1 = Instant::now();
+        let dec_len = *(PRECISION_MAP.get(&prec).unwrap()) as u64;
+        bound.set_length(0,dec_len);
+        let mut min = i64::max_value();
+        let mut max = i64::min_value();
 
-
-        for val in seg.get_data(){
-            let v = (*val).into();
-            if v<min {
-                min = v;
+        for bd in seg.get_data(){
+            let (int_part, dec_part) = bound.fetch_components((*bd).into());
+            if int_part<min {
+                min = int_part;
             }
-            if v>max {
-                max = v;
+            if int_part>max {
+                max = int_part;
             }
-            bd_vec.push(v);
+            int_vec.push(int_part);
+            dec_vec.push(dec_part as u32);
         }
-        let min_int = min.trunc();
-        let max_int = max.trunc();
-        let min_exp = min.log2() as i32;
-        let max_exp = max.log2() as i32;
-        let delta:f64 = max_int-min_int;
-        let base_int = min_int as i32;
-        println!("base integer: {}, max:{}",base_int,max_int);
+        let delta = max-min;
+        let base_int = min as i32;
+        println!("base integer: {}, max:{}",base_int,max);
         let ubase_int = unsafe { mem::transmute::<i32, u32>(base_int) };
         let base_int64:i64 = base_int as i64;
         let mut single_int = false;
         let mut cal_int_length = 0.0;
-        if delta == 0.0 {
+        if delta == 0 {
             single_int = true;
         }else {
-            cal_int_length = delta.log2().ceil();
+            cal_int_length = (delta as f64).log2().ceil();
         }
-        let duration = start.elapsed();
-        println!("Time elapsed in min_max function() is: {:?}", duration);
-        let start1 = Instant::now();
-        let (int_len,dec_len) = (cal_int_length as u64,*(PRECISION_MAP.get(&prec).unwrap()) as u64);
-        bound.set_length(int_len,dec_len);
-        let ilen = int_len as usize;
+
+        bound.set_length(cal_int_length as u64, dec_len);
+        let ilen = cal_int_length as usize;
         let dlen = dec_len as usize;
-        println!("int_len:{},dec_len:{}",int_len,dec_len);
+        println!("int_len:{},dec_len:{}",cal_int_length as u64,dec_len);
         //let cap = (int_len+dec_len)* t as u64 /8;
         let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
         bitpack_vec.write(ubase_int,32);
         bitpack_vec.write(t, 32);
         bitpack_vec.write(ilen as u32, 32);
         bitpack_vec.write(dlen as u32, 32);
-        if min_exp ==max_exp{
-            println!("use fast fetch because of the same power {}", min_exp);
-            for bd in bd_vec{
-                let (int_part, dec_part) = bound.fast_fetch_components_large(bd,min_exp);
-                // if i<10{
-                //     println!("cur: {}",bd);
-                //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
-                // }
-                // i += 1;
-                bitpack_vec.write((int_part-base_int64) as u32, ilen).unwrap();
-                dec_vec.push(dec_part as u32);
-            }
-        }else{
-            for bd in bd_vec{
-                let (int_part, dec_part) = bound.fetch_components(bd);
-                // if i<10{
-                //     println!("cur: {}",bd);
-                //     println!("{}th, int: {}, decimal: {} in form:{}",i,int_part,dec_part as f64*1.0f64/(2i64.pow(dec_len as u32)) as f64, dec_part);
-                // }
-                // i += 1;
-                bitpack_vec.write((int_part-base_int64) as u32, ilen).unwrap();
-                dec_vec.push(dec_part as u32);
-            }
-        }
 
         let duration1 = start1.elapsed();
         println!("Time elapsed in dividing double function() is: {:?}", duration1);
 
         let start1 = Instant::now();
+
+        for i in int_vec{
+            bitpack_vec.write((i-base_int64) as u32, ilen).unwrap();
+        }
+
         for d in dec_vec {
             // j += 1;
             bitpack_vec.write(d, dlen).unwrap();
