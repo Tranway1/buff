@@ -200,6 +200,7 @@ impl BitPack<Vec<u8>> {
     /// # assert_eq!(bitpack.read(10).unwrap(), 1021);
     /// # assert_eq!(bitpack.read(2).unwrap(), 3);
     /// ```
+    #[inline]
     pub fn write(&mut self, value: u32, bits: usize) -> Result<(), usize> {
         let len = self.buff.len();
 
@@ -221,6 +222,7 @@ impl BitPack<Vec<u8>> {
         Ok(())
     }
 
+    #[inline]
     pub fn into_vec(self) -> Vec<u8> {
         self.buff
     }

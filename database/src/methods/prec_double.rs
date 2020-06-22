@@ -121,6 +121,7 @@ impl PrecisionBound {
     }
 
     // this is for dataset with same power of 2, power>1
+    #[inline]
     pub fn fast_fetch_components_large(& self, bd:f64,exp:i32) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
         // let sign = bdu&FIRST_ONE;
@@ -143,6 +144,7 @@ impl PrecisionBound {
         (int_part as i64,dec_part >> dec_move)
     }
 
+    #[inline]
     pub fn fetch_components(& self, bd:f64) -> (i64,u64){
         let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
         let exp = ((bdu & EXP_MASK) >> 52) as i32 - 1023 as i32;
