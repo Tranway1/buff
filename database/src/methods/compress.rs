@@ -1714,6 +1714,114 @@ impl SplitBDDoubleCompress {
         //println!("{}", decode_reader(bytes).unwrap());
     }
 
+    pub(crate) fn byte_encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
+        where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+
+        let mut int_vec = Vec::new();
+        let mut dec_vec = Vec::new();
+
+        let mut t:u32 = seg.get_data().len() as u32;
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+        println!("precision {}, precision delta:{}", prec, prec_delta);
+
+        let mut bound = PrecisionBound::new(prec_delta);
+        // let start1 = Instant::now();
+        let dec_len = *(PRECISION_MAP.get(&prec).unwrap()) as u64;
+        bound.set_length(0,dec_len);
+        let mut min = i64::max_value();
+        let mut max = i64::min_value();
+
+        for bd in seg.get_data(){
+            let (int_part, dec_part) = bound.fetch_components((*bd).into());
+            if int_part<min {
+                min = int_part;
+            }
+            if int_part>max {
+                max = int_part;
+            }
+            int_vec.push(int_part);
+            dec_vec.push(dec_part as u64);
+        }
+        let delta = max-min;
+        let base_int = min as i32;
+        println!("base integer: {}, max:{}",base_int,max);
+        let ubase_int = unsafe { mem::transmute::<i32, u32>(base_int) };
+        let base_int64:i64 = base_int as i64;
+        let mut single_int = false;
+        let mut cal_int_length = 0.0;
+        if delta == 0 {
+            single_int = true;
+        }else {
+            cal_int_length = (delta as f64).log2().ceil();
+        }
+
+        bound.set_length(cal_int_length as u64, dec_len);
+        let ilen = cal_int_length as usize;
+        let dlen = dec_len as usize;
+        println!("int_len:{},dec_len:{}",cal_int_length as u64,dec_len);
+        //let cap = (int_len+dec_len)* t as u64 /8;
+        let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+        bitpack_vec.write(ubase_int,32);
+        bitpack_vec.write(t, 32);
+        bitpack_vec.write(ilen as u32, 32);
+        bitpack_vec.write(dlen as u32, 32);
+
+        // let duration1 = start1.elapsed();
+        // println!("Time elapsed in dividing double function() is: {:?}", duration1);
+
+        // let start1 = Instant::now();
+
+        for i in int_vec{
+            bitpack_vec.write((i-base_int64) as u32, ilen).unwrap();
+        }
+        let mut remain = dec_len;
+        let mut bytec = 0;
+        let mut shr = 0;
+
+        if (remain>=8){
+            for d in &dec_vec {
+                bitpack_vec.write_byte(*d as u8).unwrap();
+            }
+            bytec+=1;
+            remain -= 8;
+            println!("write the {}th byte of dec",bytec);
+        }
+        while (remain>=8){
+
+            shr = bytec*8;
+            for d in &dec_vec {
+
+                bitpack_vec.write_byte((*d >>shr) as u8).unwrap();
+            }
+            bytec+=1;
+            remain -= 8;
+            println!("write the {}th byte of dec",bytec);
+        }
+        if (remain>0){
+            bitpack_vec.finish_write_byte();
+            for d in dec_vec {
+                bitpack_vec.write_bits((d >>shr) as u32, remain as usize).unwrap();
+            }
+            println!("write remaining {} bits of dec",remain);
+        }
+
+        // println!("total number of dec is: {}", j);
+        let vec = bitpack_vec.into_vec();
+
+        // let duration1 = start1.elapsed();
+        // println!("Time elapsed in writing double function() is: {:?}", duration1);
+
+        let origin = t * mem::size_of::<T>() as u32;
+        info!("original size:{}", origin);
+        info!("compressed size:{}", vec.len());
+        let ratio = vec.len() as f64 /origin as f64;
+        print!("{}",ratio);
+        vec
+        //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
+        //println!("{}", decode_reader(bytes).unwrap());
+    }
+
     fn fast_encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
         where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
 
@@ -1809,6 +1917,53 @@ impl SplitBDDoubleCompress {
         for int_comp in int_vec{
             cur_intf = int_comp as f64;
             dec = bitpack.read(dlen as usize).unwrap();
+            // if j<10{
+            //     println!("{}th item {}, decimal:{}",j, cur_intf + cur_intf.signum() *(dec as f64) / dec_scl,dec);
+            // }
+            // j += 1;
+            expected_datapoints.push(cur_intf + cur_intf.signum() *(dec as f64) / dec_scl);
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    pub(crate) fn byte_decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut int_vec:Vec<i32> = Vec::new();
+
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            int_vec.push(cur as i32 + base_int);
+        }
+
+        let mut dec = 0;
+        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+        let mut j = 0;
+        let mut cur_intf = 0f64;
+        for int_comp in int_vec{
+            cur_intf = int_comp as f64;
+            dec = bitpack.read_byte().unwrap();
             // if j<10{
             //     println!("{}th item {}, decimal:{}",j, cur_intf + cur_intf.signum() *(dec as f64) / dec_scl,dec);
             // }

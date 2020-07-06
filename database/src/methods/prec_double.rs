@@ -8,6 +8,7 @@ use std::fs::File;
 use std::io::{LineWriter, Write};
 use croaring::Bitmap;
 use rust_decimal::prelude::*;
+use histogram::Histogram;
 
 /// END_MARKER is a special bit sequence used to indicate the end of the stream
 pub const EXP_MASK: u64 = 0b0111111111110000000000000000000000000000000000000000000000000000;
@@ -546,4 +547,67 @@ fn test_decimal() {
 
     println!("{}",scaled.to_string());
     println!("example: {}",example.to_string());
+}
+
+#[test]
+fn test_varible_length_hist() {
+    let file_iter = construct_file_iterator_skip_newline::<f64>("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", 0, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap().collect();
+    let clone_vec = file_vec.clone();
+    let mut histogram = Histogram::new();
+    let mut dec_hist = Histogram::new();
+
+    let mut bound = PrecisionBound::new(0.0000005);
+    let start = Instant::now();
+    for val in file_vec{
+
+        let bd = bound.precision_bound(val);
+        bound.cal_length(bd);
+        histogram.increment(bound.get_length().1);
+
+    }
+    let duration = start.elapsed();
+    println!("Time elapsed in cal_length is: {:?}", duration);
+    // print percentiles from the histogram
+    println!("Percentiles: p50: {} ns p90: {} ns p99: {} ns p999: {}",
+             histogram.percentile(50.0).unwrap(),
+             histogram.percentile(90.0).unwrap(),
+             histogram.percentile(99.0).unwrap(),
+             histogram.percentile(99.9).unwrap(),
+    );
+
+    println!("Latency (ns): Min: {} Avg: {} Max: {} StdDev: {}",
+             histogram.minimum().unwrap(),
+             histogram.mean().unwrap(),
+             histogram.maximum().unwrap(),
+             histogram.stddev().unwrap(),
+    );
+
+    let start = Instant::now();
+    for val in clone_vec{
+        let cur_str = val.to_string();
+        let string:  Vec<&str> = cur_str.split('.').collect();
+        if string.len()>1{
+            dec_hist.increment(string.get(1).unwrap().len() as u64);
+        }
+        else { dec_hist.increment(0); }
+    }
+    let duration = start.elapsed();
+    println!("Time elapsed in checking bits is: {:?}", duration);
+
+    println!("Percentiles: p10: {} ns p15: {} ns p50: {} ns p90: {}",
+             dec_hist.percentile(10.0).unwrap(),
+             dec_hist.percentile(15.0).unwrap(),
+             dec_hist.percentile(50.0).unwrap(),
+             dec_hist.percentile(90.0).unwrap(),
+    );
+
+    println!("Latency (ns): Min: {} Avg: {} Max: {} StdDev: {}",
+             dec_hist.minimum().unwrap(),
+             dec_hist.mean().unwrap(),
+             dec_hist.maximum().unwrap(),
+             dec_hist.stddev().unwrap(),
+    );
+
+
 }

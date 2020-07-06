@@ -99,6 +99,40 @@ impl<'a> BitPack<&'a mut [u8]> {
         }
         Ok(())
     }
+
+    /***
+    read bits less then BYTE_BITS
+     */
+    pub fn write_bits(&mut self, mut value: u32, mut bits: usize) -> Result<(), usize> {
+        if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
+            return Err(bits);
+        }
+        value &= ((1 << bits) - 1) as u32;
+
+        loop {
+            let bits_left = BYTE_BITS - self.bits;
+
+            if bits <= bits_left {
+                self.buff[self.cursor] |= (value as u8) << self.bits as u8;
+                self.bits += bits;
+
+                if self.bits >= BYTE_BITS {
+                    self.cursor += 1;
+                    self.bits = 0;
+                }
+
+                break
+            }
+
+            let bb = value & ((1 << bits_left) - 1) as u32;
+            self.buff[self.cursor] |= (bb as u8) << self.bits as u8;
+            self.cursor += 1;
+            self.bits = 0;
+            value >>= bits_left as u32;
+            bits -= bits_left;
+        }
+        Ok(())
+    }
 }
 
 
@@ -146,6 +180,55 @@ impl<'a> BitPack<&'a [u8]> {
                 self.bits -= BYTE_BITS;
             }
         }
+        Ok(output)
+    }
+
+    /***
+    read bits less then BYTE_BITS
+     */
+    pub fn read_bits(&mut self, mut bits: usize) -> Result<u32, usize> {
+        if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
+            return Err(bits);
+        };
+
+        let mut bits_left = 0;
+        let mut output = 0;
+        loop {
+            let byte_left = BYTE_BITS - self.bits;
+
+            if bits <= byte_left {
+                let mut bb = self.buff[self.cursor] as u32;
+                bb >>= self.bits as u32;
+                bb &= ((1 << bits) - 1) as u32;
+                output |= bb << bits_left;
+                self.bits += bits;
+                break
+            }
+
+            let mut bb = self.buff[self.cursor] as u32;
+            bb >>= self.bits as u32;
+            bb &= ((1 << byte_left) - 1) as u32;
+            output |= bb << bits_left;
+            self.bits += byte_left;
+            bits_left += byte_left as u32;
+            bits -= byte_left;
+
+            if self.bits >= BYTE_BITS {
+                self.cursor += 1;
+                self.bits -= BYTE_BITS;
+            }
+        }
+        Ok(output)
+    }
+
+    pub fn finish_read_byte(&mut self){
+        self.cursor += 1;
+        self.bits = 0;
+    }
+
+    pub fn read_byte(&mut self) -> Result<u8, usize> {
+        self.cursor += 1;
+        let output = self.buff[self.cursor] as u8;
         Ok(output)
     }
 
@@ -220,6 +303,52 @@ impl BitPack<Vec<u8>> {
         self.cursor = bitpack.cursor;
 
         Ok(())
+    }
+
+    /***
+    read bits less then BYTE_BITS
+     */
+    #[inline]
+    pub fn write_bits(&mut self, value: u32, bits: usize) -> Result<(), usize> {
+        let len = self.buff.len();
+
+        if let Some(bits) = (self.sum_bits() + bits).checked_sub(len * BYTE_BITS) {
+            self.buff.resize(len + (bits + BYTE_BITS - 1) / BYTE_BITS, 0x0);
+        }
+
+        let mut bitpack = BitPack {
+            buff: self.buff.as_mut_slice(),
+            cursor: self.cursor,
+            bits: self.bits
+        };
+
+        bitpack.write_bits(value, bits)?;
+
+        self.bits = bitpack.bits;
+        self.cursor = bitpack.cursor;
+
+        Ok(())
+    }
+
+
+
+    #[inline]
+    pub fn write_byte(&mut self, value: u8) -> Result<(), usize> {
+        self.buff.push(value);
+        let len = self.buff.len();
+
+        self.bits = BYTE_BITS;
+        self.cursor = self.cursor + 1;
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn finish_write_byte(&mut self) {
+        let len = self.buff.len();
+        self.buff.resize(len + 1, 0x0);
+        self.bits = 0;
+        self.cursor += 1;
     }
 
     #[inline]
