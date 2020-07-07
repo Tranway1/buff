@@ -186,8 +186,10 @@ impl<'a> BitPack<&'a [u8]> {
     /***
     read bits less then BYTE_BITS
      */
-    pub fn read_bits(&mut self, mut bits: usize) -> Result<u32, usize> {
+
+    pub fn read_bits(&mut self, mut bits: usize) -> Result<u8, usize> {
         if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
+            println!("buff length: {}, cursor: {}, bits: {}", self.buff.len(), self.cursor,self.bits);
             return Err(bits);
         };
 
@@ -197,20 +199,20 @@ impl<'a> BitPack<&'a [u8]> {
             let byte_left = BYTE_BITS - self.bits;
 
             if bits <= byte_left {
-                let mut bb = self.buff[self.cursor] as u32;
-                bb >>= self.bits as u32;
-                bb &= ((1 << bits) - 1) as u32;
+                let mut bb = self.buff[self.cursor] as u8;
+                bb >>= self.bits as u8;
+                bb &= ((1 << bits) - 1) as u8;
                 output |= bb << bits_left;
                 self.bits += bits;
                 break
             }
 
-            let mut bb = self.buff[self.cursor] as u32;
-            bb >>= self.bits as u32;
-            bb &= ((1 << byte_left) - 1) as u32;
+            let mut bb = self.buff[self.cursor] as u8;
+            bb >>= self.bits as u8;
+            bb &= ((1 << byte_left) - 1) as u8;
             output |= bb << bits_left;
             self.bits += byte_left;
-            bits_left += byte_left as u32;
+            bits_left += byte_left as u8;
             bits -= byte_left;
 
             if self.bits >= BYTE_BITS {
@@ -221,14 +223,26 @@ impl<'a> BitPack<&'a [u8]> {
         Ok(output)
     }
 
+    #[inline]
     pub fn finish_read_byte(&mut self){
         self.cursor += 1;
         self.bits = 0;
+        println!("cursor now at {}" , self.cursor)
     }
 
+    #[inline]
     pub fn read_byte(&mut self) -> Result<u8, usize> {
         self.cursor += 1;
         let output = self.buff[self.cursor] as u8;
+        Ok(output)
+    }
+
+    #[inline]
+    pub fn read_n_byte(&mut self,n:usize) -> Result<[u8], usize> {
+        self.cursor += 1;
+        let end = self.cursor+n;
+        let output = self.buff[self.cursor..end];
+        self.cursor += n-1;
         Ok(output)
     }
 
@@ -335,11 +349,6 @@ impl BitPack<Vec<u8>> {
     #[inline]
     pub fn write_byte(&mut self, value: u8) -> Result<(), usize> {
         self.buff.push(value);
-        let len = self.buff.len();
-
-        self.bits = BYTE_BITS;
-        self.cursor = self.cursor + 1;
-
         Ok(())
     }
 
@@ -348,11 +357,13 @@ impl BitPack<Vec<u8>> {
         let len = self.buff.len();
         self.buff.resize(len + 1, 0x0);
         self.bits = 0;
-        self.cursor += 1;
+        self.cursor = len;
+        println!("cursor now at {}" , self.cursor)
     }
 
     #[inline]
     pub fn into_vec(self) -> Vec<u8> {
+        // println!("buff length: {}, cursor: {}, bits: {}", self.buff.len(), self.cursor,self.bits);
         self.buff
     }
 }

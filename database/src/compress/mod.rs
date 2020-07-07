@@ -137,7 +137,7 @@ pub fn run_sprintz_double_encoding_decoding(test_file:&str, scl:usize,pred: f64)
     )
 }
 
-pub fn run_splitbd_best_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
+pub fn run_splitbd_fast_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
     let file_vec: Vec<f64> = file_iter.unwrap()
         .map(|x| (x*SCALE))

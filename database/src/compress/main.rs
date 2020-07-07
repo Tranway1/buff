@@ -1,5 +1,5 @@
 use std::env;
-use time_series_start::compress::{run_bpsplit_encoding_decoding, run_gorilla_encoding_decoding, run_gorillabd_encoding_decoding, run_splitbd_encoding_decoding, run_snappy_encoding_decoding, run_gzip_encoding_decoding, run_bp_double_encoding_decoding, run_sprintz_double_encoding_decoding, run_parquet_write_filter, run_splitbd_best_encoding_decoding};
+use time_series_start::compress::{run_bpsplit_encoding_decoding, run_gorilla_encoding_decoding, run_gorillabd_encoding_decoding, run_splitbd_encoding_decoding, run_snappy_encoding_decoding, run_gzip_encoding_decoding, run_bp_double_encoding_decoding, run_sprintz_double_encoding_decoding, run_parquet_write_filter, run_splitbd_fast_encoding_decoding};
 use log::{error, info, warn};
 use log4rs;
 
@@ -28,7 +28,7 @@ fn main() {
             run_splitbd_encoding_decoding(input_file,int_scale,pred);
         },
         "fastsplitbd" => {
-            run_splitbd_best_encoding_decoding(input_file,int_scale,pred);
+            run_splitbd_fast_encoding_decoding(input_file,int_scale,pred);
         },
         "snappy" => {
             run_snappy_encoding_decoding(input_file,int_scale,pred);
