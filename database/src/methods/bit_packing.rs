@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
 
 pub const MAX_BITS: usize = 32;
-const BYTE_BITS: usize = 8;
+pub const BYTE_BITS: usize = 8;
 
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -227,7 +227,7 @@ impl<'a> BitPack<&'a [u8]> {
     pub fn finish_read_byte(&mut self){
         self.cursor += 1;
         self.bits = 0;
-        println!("cursor now at {}" , self.cursor)
+        // println!("cursor now at {}" , self.cursor)
     }
 
     #[inline]
@@ -238,33 +238,34 @@ impl<'a> BitPack<&'a [u8]> {
     }
 
     #[inline]
-    pub fn read_n_byte(&mut self,n:usize) -> Result<[u8], usize> {
+    pub fn read_n_byte(&mut self,n:usize) -> Result<&[u8], usize> {
         self.cursor += 1;
         let end = self.cursor+n;
-        let output = self.buff[self.cursor..end];
+        let output = &self.buff[self.cursor..end];
         self.cursor += n-1;
         Ok(output)
     }
 
-
+    #[inline]
+    pub fn skip_n_byte(&mut self, mut n: usize) -> Result<(), usize> {
+        self.cursor += n;
+        // println!("current cursor{}, current bits:{}",self.cursor,self.bits);
+        Ok(())
+    }
+    #[inline]
     pub fn skip(&mut self, mut bits: usize) -> Result<(), usize> {
         if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
             return Err(bits);
         };
         // println!("current cursor{}, current bits:{}",self.cursor,self.bits);
         // println!("try to skip {} bits",bits);
-        let byte_left = BYTE_BITS - self.bits;
-        if (bits<=byte_left){
-            self.bits += bits;
-        }
-        else {
-            self.cursor += 1;
-            let remains = (bits-byte_left);
-            let bytes = remains/BYTE_BITS;
-            let left = remains%BYTE_BITS;
-            self.cursor += bytes;
-            self.bits = left;
-        }
+        let bytes = bits/BYTE_BITS;
+        let left = bits%BYTE_BITS;
+
+        let cur_bits = (self.bits +left);
+        self.cursor = self.cursor + bytes + cur_bits/BYTE_BITS;
+        self.bits = cur_bits%BYTE_BITS;
+
         // println!("current cursor{}, current bits:{}",self.cursor,self.bits);
         Ok(())
     }
@@ -358,7 +359,7 @@ impl BitPack<Vec<u8>> {
         self.buff.resize(len + 1, 0x0);
         self.bits = 0;
         self.cursor = len;
-        println!("cursor now at {}" , self.cursor)
+        // println!("cursor now at {}" , self.cursor)
     }
 
     #[inline]

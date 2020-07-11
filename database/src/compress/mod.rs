@@ -1,6 +1,10 @@
+pub mod split_double;
+pub mod sprintz;
+pub mod gorilla;
+
 use std::{env, fs};
 use crate::client::construct_file_iterator_skip_newline;
-use crate::methods::compress::{ SCALE, SplitDoubleCompress, test_split_compress_on_file, BPDoubleCompress, test_BP_double_compress_on_file, SprintzDoubleCompress, test_sprintz_double_compress_on_file, SplitBDDoubleCompress, test_splitbd_compress_on_file, GorillaBDCompress, test_grillabd_compress_on_file, GorillaCompress, test_grilla_compress_on_file, GZipCompress, SnappyCompress, PRED};
+use crate::methods::compress::{ SCALE, SplitDoubleCompress, test_split_compress_on_file, BPDoubleCompress, test_BP_double_compress_on_file, test_sprintz_double_compress_on_file, test_splitbd_compress_on_file, test_grillabd_compress_on_file, test_grilla_compress_on_file, GZipCompress, SnappyCompress, PRED};
 use std::time::{SystemTime, Instant};
 use crate::segment::Segment;
 use std::path::Path;
@@ -16,6 +20,9 @@ use croaring::Bitmap;
 use parquet::file::reader::{SerializedFileReader, FileReader};
 use parquet::record::RowAccessor;
 use parity_snappy::compress;
+use crate::compress::split_double::SplitBDDoubleCompress;
+use crate::compress::sprintz::SprintzDoubleCompress;
+use crate::compress::gorilla::{GorillaBDCompress, GorillaCompress};
 
 pub fn run_bpsplit_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
@@ -152,22 +159,22 @@ pub fn run_splitbd_fast_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_size = compressed.len();
-    println!("Time elapsed in splitbd best compress function() is: {:?}", duration1);
+    println!("Time elapsed in splitbd byte compress function() is: {:?}", duration1);
 
     let start2 = Instant::now();
     comp.byte_decode(compressed);
     let duration2 = start2.elapsed();
-    println!("Time elapsed in splitbd best decompress function() is: {:?}", duration2);
+    println!("Time elapsed in splitbd byte decompress function() is: {:?}", duration2);
 
     let start3 = Instant::now();
-    // comp.range_filter(comp_cp,pred);
+    comp.byte_range_filter(comp_cp,pred);
     let duration3 = start3.elapsed();
-    println!("Time elapsed in splitbd best range filter function() is: {:?}", duration3);
+    println!("Time elapsed in splitbd byte range filter function() is: {:?}", duration3);
 
     let start4 = Instant::now();
-    // comp.equal_filter(comp_eq,pred);
+    comp.byte_equal_filter(comp_eq,pred);
     let duration4 = start4.elapsed();
-    println!("Time elapsed in splitbd best equal filter function() is: {:?}", duration4);
+    println!("Time elapsed in splitbd byte equal filter function() is: {:?}", duration4);
 
     println!("Performance:{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,

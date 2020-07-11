@@ -1,15 +1,12 @@
 #[macro_use]
 extern crate serde_derive;
 extern crate bincode;
-#[macro_use]
-extern crate futures;
+#[macro_use] extern crate futures;
 extern crate toml_loader;
-#[macro_use]
-extern crate queues;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate ndarray;
+#[macro_use] extern crate queues;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate itertools;
+#[macro_use] extern crate ndarray;
 extern crate ndarray_linalg;
 
 use rand::prelude::*;
@@ -60,7 +57,7 @@ use ndarray_linalg::Lapack;
 use crate::compression_demon::CompressionDemon;
 use std::thread;
 use crate::kernel::Kernel;
-use crate::methods::compress::{GZipCompress, ZlibCompress, DeflateCompress, SnappyCompress, GorillaCompress, CompressionMethod};
+use crate::methods::compress::{GZipCompress, ZlibCompress, DeflateCompress, SnappyCompress, CompressionMethod};
 use crate::methods::Methods::Fourier;
 use crate::methods::gorilla_encoder::GorillaEncoder;
 
