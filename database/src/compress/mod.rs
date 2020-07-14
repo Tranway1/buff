@@ -4,7 +4,7 @@ pub mod gorilla;
 
 use std::{env, fs};
 use crate::client::construct_file_iterator_skip_newline;
-use crate::methods::compress::{ SCALE, SplitDoubleCompress, test_split_compress_on_file, BPDoubleCompress, test_BP_double_compress_on_file, test_sprintz_double_compress_on_file, test_splitbd_compress_on_file, test_grillabd_compress_on_file, test_grilla_compress_on_file, GZipCompress, SnappyCompress, PRED};
+use crate::methods::compress::{SCALE, SplitDoubleCompress, test_split_compress_on_file, BPDoubleCompress, test_BP_double_compress_on_file, test_sprintz_double_compress_on_file, test_splitbd_compress_on_file, test_grillabd_compress_on_file, test_grilla_compress_on_file, GZipCompress, SnappyCompress, PRED, TEST_FILE};
 use std::time::{SystemTime, Instant};
 use crate::segment::Segment;
 use std::path::Path;
@@ -510,3 +510,5 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0
     )
 }
+
+

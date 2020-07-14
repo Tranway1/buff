@@ -54,6 +54,36 @@ impl SprintzDoubleCompress {
         expected_datapoints
     }
 
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut pre = base_int;
+        let mut delta = 0i32;
+        let mut cur_int = 0i32;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            delta = unzigzag(cur);
+            cur_int = pre+delta;
+            // if i<10{
+            //     println!("{}th value: {}",i,(cur_int as f64)/scl);
+            // }
+            expected_datapoints.push((cur_int as f64)/scl);
+            pre = cur_int;
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
     pub fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let ubase_int = bitpack.read(32).unwrap();

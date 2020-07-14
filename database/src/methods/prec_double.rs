@@ -13,7 +13,7 @@ use histogram::Histogram;
 /// END_MARKER is a special bit sequence used to indicate the end of the stream
 pub const EXP_MASK: u64 = 0b0111111111110000000000000000000000000000000000000000000000000000;
 pub const FIRST_ONE: u64 = 0b1000000000000000000000000000000000000000000000000000000000000000;
-
+pub const NEG_ONE: u64 = 0b1111111111111111111111111111111111111111111111111111111111111111;
 
 pub struct PrecisionBound {
     position: u64,
@@ -158,14 +158,24 @@ impl PrecisionBound {
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
             int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+            if sign!=0{
+                int_part = !int_part;
+                dec_part = !dec_part + 1;
+            }
         }else if exp<self.precision_exp{
             dec_part=0u64;
+            if sign!=0{
+                int_part = NEG_ONE;
+                dec_part = !dec_part;
+            }
         }else{
             dec_part = ((bdu << (11)) | FIRST_ONE) >> ((-exp - 1) as u64);
+            if sign!=0{
+                int_part = NEG_ONE;
+                dec_part = !dec_part;
+            }
         }
-        if sign!=0{
-            int_part = !(int_part-1);
-        }
+
         let signed_int = unsafe { mem::transmute::<u64, i64>(int_part) };
         //let signed_int = bd.trunc() as i64;
         (signed_int, dec_part >> 64u64-self.decimal_length)

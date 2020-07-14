@@ -16,6 +16,11 @@ path = "src/methods/main.rs"
 name = "comp_profiler"
 path = "src/compress/main.rs"
 
+[[bin]]
+name = "p_scan"
+path = "src/pscan/main.rs"
+
+
 [dependencies]
 num = "0.2"
 log4rs = "0.10.0"
@@ -50,4 +55,4 @@ libc = "0.2"
 packed_simd = "0.3.3"
 histogram = "0.6.9"
 itertools = "0.9.0"
-
+#plotters = "0.2.15"

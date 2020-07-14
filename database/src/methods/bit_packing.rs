@@ -199,20 +199,20 @@ impl<'a> BitPack<&'a [u8]> {
             let byte_left = BYTE_BITS - self.bits;
 
             if bits <= byte_left {
-                let mut bb = self.buff[self.cursor] as u8;
-                bb >>= self.bits as u8;
-                bb &= ((1 << bits) - 1) as u8;
+                let mut bb = self.buff[self.cursor] as u32;
+                bb >>= self.bits as u32;
+                bb &= ((1 << bits) - 1) as u32;
                 output |= bb << bits_left;
                 self.bits += bits;
                 break
             }
 
-            let mut bb = self.buff[self.cursor] as u8;
-            bb >>= self.bits as u8;
-            bb &= ((1 << byte_left) - 1) as u8;
+            let mut bb = self.buff[self.cursor] as u32;
+            bb >>= self.bits as u32;
+            bb &= ((1 << byte_left) - 1) as u32;
             output |= bb << bits_left;
             self.bits += byte_left;
-            bits_left += byte_left as u8;
+            bits_left += byte_left as u32;
             bits -= byte_left;
 
             if self.bits >= BYTE_BITS {
@@ -220,7 +220,7 @@ impl<'a> BitPack<&'a [u8]> {
                 self.bits -= BYTE_BITS;
             }
         }
-        Ok(output)
+        Ok(output as u8)
     }
 
     #[inline]
