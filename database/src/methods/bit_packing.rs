@@ -380,7 +380,7 @@ pub(crate) fn num_bits(mydata: &[u32]) -> u8{
 }
 
 pub(crate) fn delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
-    info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
+    // info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
     let mut delta = 0u32;
@@ -626,7 +626,7 @@ pub(crate) fn bp_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     let (base, num_bits, delta_vec) = delta_num_bits(ldata.as_ref());
     println!("base int:{}",base);
     println!("Number of bits: {}", num_bits);
-    info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
+    // info!("10th vec: {},{},{},{}", delta_vec[0],delta_vec[1],delta_vec[2],delta_vec[3]);
     let ubase_int = unsafe { mem::transmute::<i32, u32>(base) };
     let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
     bitpack_vec.write(ubase_int,32);

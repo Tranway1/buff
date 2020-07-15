@@ -4,7 +4,7 @@ cd /home/cc/TimeSeriesDB/database;
 TIME=$4
 SCL=$2
 PRED=$3
-for comp in gorilla gorillabd splitbd bp bpsplit gzip snappy sprintz plain dict pqgzip pqsnappy;
+for comp in gorilla gorillabd splitbd fastsplitbd bp bpsplit gzip snappy sprintz plain dict pqgzip pqsnappy;
 do
   for i in $(seq 1 $TIME);
 		do
@@ -21,5 +21,5 @@ do
 
 done
 echo "Float compression done!"
-python ./script/python/logparser.py nohup.out performance.csv $TIME
+python ./script/python/logparser.py new.out performance.csv $TIME
 			

@@ -26,30 +26,53 @@ fn main() {
     let compressed = comp.byte_encode(&mut seg);
     let duration1 = start1.elapsed();
     let comp_cp = compressed.clone();
+    let comp_de = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in splitbd byte compress function() is: {:?}", duration1);
 
     let start2 = Instant::now();
-    comp.byte_decode(compressed);
+    comp.byte_decode(comp_de);
     let duration2 = start2.elapsed();
     println!("Time elapsed in splitbd byte full decompress function() is: {:?}", duration2);
 
     let start3 = Instant::now();
-    comp.decode_with_precision(comp_cp,0);
+    comp.decode_with_precision(comp_cp,2);
     let duration3 = start3.elapsed();
-    println!("Time elapsed in splitbd byte 0 precision decompress function() is: {:?}", duration3);
+    println!("Time elapsed in splitbd byte 2 precision decompress function() is: {:?}", duration3);
 
     let start4 = Instant::now();
-    comp.decode_with_precision(comp_eq,2);
+    comp.decode_with_precision(comp_eq,0);
     let duration4 = start4.elapsed();
-    println!("Time elapsed in splitbd byte 2 precision filter function() is: {:?}", duration4);
+    println!("Time elapsed in splitbd byte 0 precision filter function() is: {:?}", duration4);
 
-    println!("Performance:{},{},{},{},{},{},{}", test_file, scl,
+    let comp_5 = compressed.clone();
+    let comp_6 = compressed.clone();
+    let comp_7 = compressed.clone();
+
+    let start5 = Instant::now();
+    comp.byte_sum(comp_5);
+    let duration5 = start5.elapsed();
+    println!("Time elapsed in splitbd byte full sum function() is: {:?}", duration5);
+
+    let start6 = Instant::now();
+    comp.sum_with_precision(comp_6,2);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in splitbd byte 2 precision sum function() is: {:?}", duration6);
+
+    let start7 = Instant::now();
+    comp.sum_with_precision(comp_7,0);
+    let duration7 = start7.elapsed();
+    println!("Time elapsed in splitbd byte 0 precision sum function() is: {:?}", duration7);
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration7.as_nanos() as f64 / 1024.0/1024.0
     )
 }

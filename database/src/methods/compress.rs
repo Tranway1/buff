@@ -344,6 +344,22 @@ impl GZipCompress {
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
     }
+
+
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        info!("size read:{}, original size:{}", ct, s.len());
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {expected_datapoints = new_seg.get_data().clone()},
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        let sum:f64 = expected_datapoints.iter().sum();
+        println!("sum is: {:?}",sum);
+        sum
+    }
     pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut s:Vec<u8> = Vec::new();
@@ -596,6 +612,24 @@ impl SnappyCompress {
         expected_datapoints
     }
 
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut sum =0f64;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    sum+=(*e);
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("sum is: {:?}",sum);
+        sum
+    }
+
     pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
         let mut snappy = decompress(bytes.as_slice());
         let mut s = snappy.unwrap();
@@ -728,6 +762,51 @@ impl SplitDoubleCompress {
         }
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
+    }
+
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64{
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut int_vec:Vec<i32> = Vec::new();
+        let mut sum_int = (base_int*len as i32) as i64;
+        let mut sum_dec = 0u64;
+
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            sum_int+=(cur as i64);
+        }
+
+        let mut dec = 0;
+        let dec_scl:f64 = self.scale as f64;
+        println!("Scale for decimal:{}", dec_scl);
+        let mut j = 0;
+        let mut cur_intf = 0f64;
+        for i in 0..len {
+            dec = bitpack.read(dlen as usize).unwrap();
+            sum_dec+= (dec as u64);
+            // if j<10{
+            //     println!("{}th item {}, decimal:{}",j, cur_intf + (dec as f64) / dec_scl,dec);
+            // }
+            // j += 1;
+            expected_datapoints.push(cur_intf + (dec as f64) / dec_scl);
+        }
+        let sum = sum_dec as f64/dec_scl + sum_int as f64;
+        println!("sum is: {:?}",sum);
+        sum
     }
 
     pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
@@ -954,6 +1033,28 @@ impl BPDoubleCompress {
         }
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
+    }
+
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64{
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut sum_int = base_int as i64 *len as i64;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            sum_int+=cur as i64;
+        }
+        let sum = sum_int as f64/scl;
+        // println!("sum_int:{}, sum_f:{}",sum_int, sum);
+        println!("sum is: {:?}",sum);
+        sum
     }
 
     pub(crate) fn range_filter(&self, bytes: Vec<u8>, pred:f64) {

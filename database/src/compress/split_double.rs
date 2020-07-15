@@ -477,6 +477,204 @@ impl SplitBDDoubleCompress {
         expected_datapoints
     }
 
+
+    pub fn sum_with_precision(&self, bytes: Vec<u8>, precision:u32) -> f64{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+
+        let mut remain = dlen;
+        let mut processed = 0;
+        let mut sum_int:i64 = (len as i32 * base_int) as i64;
+        let mut sum_dec:u64 = 0;
+        let mut sum = 0.0f64;
+
+        if precision == 0{
+            for i in 0..len {
+                cur = bitpack.read(ilen as usize).unwrap();
+                sum_int+= cur as i64;
+            }
+            sum =sum_int as f64;
+            println!("sum of integer part:{}", sum);
+            return sum
+        }
+        else {
+            let bits_needed = *(PRECISION_MAP.get(&(precision as i32)).unwrap()) as u32;
+            assert!(dlen>=bits_needed);
+            remain = bits_needed;
+            let dec_byte = dlen/8;
+            let mut byte_needed = bits_needed/8;
+            let extra_bits = bits_needed%8;
+            if byte_needed<dec_byte{
+                if extra_bits>0{
+                    byte_needed += 1;
+                    remain = byte_needed*8;
+                }
+            }
+            println!("adjusted dec bits to decode:{}",remain);
+
+            for i in 0..len {
+                cur = bitpack.read(ilen as usize).unwrap();
+                sum_int+= cur as i64;
+            }
+            sum =sum_int as f64;
+            println!("sum of integer part:{}", sum);
+
+            let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+            // println!("Scale for decimal:{}", dec_scl);
+
+            let mut bytec = 0;
+            let mut chunk;
+
+            if (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed);
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                for dec_comp in chunk.iter(){
+                    sum_dec += (*dec_comp) as u64;
+                }
+                sum = sum+(sum_dec as f64)/dec_scl;
+                sum_dec=0;
+                println!("sum the {}th byte of dec",bytec);
+                println!("now sum :{}", sum);
+                if remain == 0 {
+                    return sum
+                }
+            }
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed);
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                for dec_comp in chunk.iter(){
+                    sum_dec += (*dec_comp) as u64;
+                }
+                sum = sum+(sum_dec as f64)/dec_scl;
+                sum_dec=0;
+                println!("sum the {}th byte of dec",bytec);
+                println!("now sum :{}", sum);
+                if remain == 0 {
+                    return sum
+                }
+            }
+            if (remain>0){
+                // let mut j =0;
+                bitpack.finish_read_byte();
+                println!("sum remaining {} bits of dec",remain);
+                processed += remain as i32;
+                dec_scl = 2.0f64.powi(processed);
+                for i in 0..len {
+                    sum_dec += (bitpack.read_bits( remain as usize).unwrap() as u64);
+                }
+                sum = sum+(sum_dec as f64)/dec_scl;
+            }
+            println!("final sum :{}", sum);
+            sum
+        }
+    }
+
+    pub fn byte_sum(&self, bytes: Vec<u8>) -> f64{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+
+        let mut remain = dlen;
+        let mut processed = 0;
+        let mut sum_int:i64 = (len as i32 * base_int) as i64;
+        let mut sum_dec:u64 = 0;
+        let mut sum = 0.0f64;
+
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            sum_int+= cur as i64;
+        }
+        sum =sum_int as f64;
+        println!("sum of integer part:{}", sum);
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        // println!("Scale for decimal:{}", dec_scl);
+
+        let mut bytec = 0;
+        let mut chunk;
+
+        if (remain>=8){
+            bytec+=1;
+            remain -= 8;
+            processed += 8;
+            dec_scl = 2.0f64.powi(processed);
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+            for dec_comp in chunk.iter(){
+                sum_dec += (*dec_comp) as u64;
+            }
+            sum = sum+(sum_dec as f64)/dec_scl;
+            sum_dec=0;
+            println!("sum the {}th byte of dec",bytec);
+            println!("now sum :{}", sum);
+            if remain == 0 {
+                return sum
+            }
+        }
+        while (remain>=8){
+            bytec+=1;
+            remain -= 8;
+            processed += 8;
+            dec_scl = 2.0f64.powi(processed);
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+            for dec_comp in chunk.iter(){
+                sum_dec += (*dec_comp) as u64;
+            }
+            sum = sum+(sum_dec as f64)/dec_scl;
+            sum_dec=0;
+            println!("sum the {}th byte of dec",bytec);
+            println!("now sum :{}", sum);
+            if remain == 0 {
+                return sum
+            }
+        }
+        if (remain>0){
+            // let mut j =0;
+            bitpack.finish_read_byte();
+            println!("sum remaining {} bits of dec",remain);
+            processed += remain as i32;
+            dec_scl = 2.0f64.powi(processed);
+            for i in 0..len {
+                sum_dec += (bitpack.read_bits( remain as usize).unwrap() as u64);
+            }
+            sum = sum+(sum_dec as f64)/dec_scl;
+        }
+        println!("sum is: {:?}",sum);
+        sum
+    }
+
     pub fn decode_with_precision(&self, bytes: Vec<u8>, precision:u32) -> Vec<f64>{
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -501,6 +699,7 @@ impl SplitBDDoubleCompress {
         let mut dec_vec = Vec::new();
         let mut cur_intf = 0f64;
         let mut remain = dlen;
+        let mut processed = 0;
 
         if precision == 0{
             for i in 0..len {
@@ -531,7 +730,7 @@ impl SplitBDDoubleCompress {
             }
 
             let mut dec = 0;
-            let dec_scl:f64 = 2.0f64.powi(dlen as i32);
+            let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
             println!("Scale for decimal:{}", dec_scl);
 
             let mut bytec = 0;
@@ -540,10 +739,13 @@ impl SplitBDDoubleCompress {
             if (remain>=8){
                 bytec+=1;
                 remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed);
                 chunk = bitpack.read_n_byte(len as usize).unwrap();
                 if remain == 0 {
                     for (int_comp,dec_comp) in int_vec.iter().zip(chunk.iter()){
                         cur_intf = *int_comp as f64;
+                        //todo: this is problemetic.
                         expected_datapoints.push(cur_intf + (((*dec_comp)) as f64) / dec_scl);
                     }
 
@@ -564,6 +766,8 @@ impl SplitBDDoubleCompress {
             while (remain>=8){
                 bytec+=1;
                 remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed);
                 chunk = bitpack.read_n_byte(len as usize).unwrap();
                 if remain == 0 {
                     // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
@@ -588,6 +792,8 @@ impl SplitBDDoubleCompress {
                 bitpack.finish_read_byte();
                 println!("read remaining {} bits of dec",remain);
                 println!("length for int:{} and length for dec: {}", int_vec.len(),dec_vec.len());
+                processed += remain as i32;
+                dec_scl = 2.0f64.powi(processed);
                 for (int_comp,dec_comp) in int_vec.iter().zip(dec_vec.iter()){
                     cur_intf = *int_comp as f64;
                     // if j<10{
@@ -632,7 +838,7 @@ impl SplitBDDoubleCompress {
         }
 
         let mut dec = 0;
-        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        let dec_scl = 2.0f64.powi(dlen as i32);
         println!("Scale for decimal:{}", dec_scl);
         let mut j = 0;
         let mut cur_intf = 0f64;
@@ -667,33 +873,27 @@ impl SplitBDDoubleCompress {
         // check integer part and update bitmap;
         let mut cur;
 
-        let mut expected_datapoints:Vec<f64> = Vec::new();
-        let mut int_vec:Vec<i32> = Vec::new();
+        let mut int_sum:i64 =  len as i64 * base_int as i64;
+        let mut dec_sum = 0;
 
         for i in 0..len {
             cur = bitpack.read(ilen as usize).unwrap();
-            // if i<10{
-            //     println!("{}th value: {}",i,cur);
-            // }
-            int_vec.push(cur as i32 + base_int);
+            int_sum = int_sum + cur as i64;
         }
+        println!("sum of integer part:{}", int_sum);
 
         let mut dec = 0;
-        let dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        let dec_scl = 2.0f64.powi(dlen as i32);
         println!("Scale for decimal:{}", dec_scl);
-        let mut j = 0;
-        let mut cur_intf = 0f64;
-        for int_comp in int_vec{
-            cur_intf = int_comp as f64;
+
+        for j in 0..len{
             dec = bitpack.read(dlen as usize).unwrap();
-            // if j<10{
-            //     println!("{}th item {}, decimal:{}",j, cur_intf + (dec as f64) / dec_scl,dec);
-            // }
-            // j += 1;
-            expected_datapoints.push(cur_intf + (dec as f64) / dec_scl);
+            dec_sum+=dec as u64;
         }
-        println!("Number of scan items:{}", expected_datapoints.len());
-        expected_datapoints.iter().sum()
+        let sum = int_sum as f64 + (dec_sum as f64) / dec_scl;
+        println!("int sum: {}, f64 sum: {}", dec_sum, dec_sum as f64);
+        println!("sum of column:{}", sum);
+        sum
     }
 
     pub(crate) fn bit_decode(&self, bytes: Vec<u8>) -> Vec<f64>{

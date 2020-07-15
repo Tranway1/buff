@@ -88,6 +88,38 @@ impl GorillaCompress {
         expected_datapoints
     }
 
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut sum = 0f64;
+        let mut done = false;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    // i += 1;
+                    sum+=dp;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        println!("sum is: {:?}",sum);
+        sum
+    }
+
+
     pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
@@ -276,6 +308,34 @@ impl GorillaBDCompress {
         }
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
+    }
+
+
+    pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut sum = 0f64;
+        let mut done = false;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    sum += dp;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        println!("sum is: {:?}",sum);
+        sum
     }
 
     pub(crate) fn range_filter(&self, bytes: Vec<u8>, pred:f64) -> Vec<f64> {
