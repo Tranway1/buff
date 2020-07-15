@@ -410,7 +410,7 @@ impl SplitBDDoubleCompress {
         let mut remain = dlen;
         let mut bytec = 0;
         let mut chunk;
-
+        // let start = Instant::now();
         if (remain>=8){
             bytec+=1;
             remain -= 8;
@@ -435,6 +435,7 @@ impl SplitBDDoubleCompress {
             }
             println!("read the {}th byte of dec",bytec);
         }
+
         while (remain>=8){
             bytec+=1;
             remain -= 8;
@@ -457,21 +458,29 @@ impl SplitBDDoubleCompress {
 
             println!("read the {}th byte of dec",bytec);
         }
+        // let duration = start.elapsed();
+        // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+        // let start5 = Instant::now();
         if (remain>0){
             // let mut j =0;
             bitpack.finish_read_byte();
             println!("read remaining {} bits of dec",remain);
             println!("length for int:{} and length for dec: {}", int_vec.len(),dec_vec.len());
             for (int_comp,dec_comp) in int_vec.iter().zip(dec_vec.iter()){
-                cur_intf = *int_comp as f64;
+                // cur_intf = *int_comp as f64;
                 // let cur_f = cur_intf + (((*dec_comp)|(bitpack.read_bits( remain as usize).unwrap() as u32)) as f64) / dec_scl;
                 // if j<20{
                 //     println!("{}th item {}, decimal:{}",j, cur_f,*dec_comp);
                 // }
                 // j += 1;
-                expected_datapoints.push( cur_intf + (((*dec_comp)|(bitpack.read_bits( remain as usize).unwrap() as u32)) as f64) / dec_scl);
+                expected_datapoints.push( *int_comp as f64 + (((*dec_comp)|(bitpack.read_bits( remain as usize).unwrap() as u32)) as f64) / dec_scl);
             }
         }
+        // let duration5 = start5.elapsed();
+        // println!("Time elapsed tail bits is: {:?}", duration5);
+
 
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
@@ -498,7 +507,7 @@ impl SplitBDDoubleCompress {
 
         let mut remain = dlen;
         let mut processed = 0;
-        let mut sum_int:i64 = (len as i32 * base_int) as i64;
+        let mut sum_int:i64 = len as i64 * base_int as i64;
         let mut sum_dec:u64 = 0;
         let mut sum = 0.0f64;
 
@@ -609,7 +618,7 @@ impl SplitBDDoubleCompress {
 
         let mut remain = dlen;
         let mut processed = 0;
-        let mut sum_int:i64 = (len as i32 * base_int) as i64;
+        let mut sum_int:i64 = len as i64 * base_int as i64;
         let mut sum_dec:u64 = 0;
         let mut sum = 0.0f64;
 

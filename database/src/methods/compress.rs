@@ -779,7 +779,7 @@ impl SplitDoubleCompress {
         // check integer part and update bitmap;
         let mut cur;
         let mut int_vec:Vec<i32> = Vec::new();
-        let mut sum_int = (base_int*len as i32) as i64;
+        let mut sum_int = base_int as i64 *len as i64;
         let mut sum_dec = 0u64;
 
         for i in 0..len {

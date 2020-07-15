@@ -187,6 +187,7 @@ impl<'a> BitPack<&'a [u8]> {
     read bits less then BYTE_BITS
      */
 
+    #[inline]
     pub fn read_bits(&mut self, mut bits: usize) -> Result<u8, usize> {
         if self.buff.len() * BYTE_BITS < self.sum_bits() + bits {
             println!("buff length: {}, cursor: {}, bits: {}", self.buff.len(), self.cursor,self.bits);

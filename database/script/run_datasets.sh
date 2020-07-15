@@ -1,3 +1,15 @@
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 1.1509 5 >> new.out
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 4.1582 5 >> new.out
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 9.1517 5 >> new.out
+mv performance.csv cbf-performance.csv
+rm new.out
+
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 39.753071 5 >> new.out
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 40.759209 5 >> new.out
+nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 41.75766 5 >> new.out
+mv performance.csv dropoff_latitude-performance.csv
+rm new.out
+
 nohup bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 3.59375 5 >> new.out
 nohup bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 172.625 5 >> new.out
 nohup bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 269.2344 5 >> new.out
@@ -26,18 +38,6 @@ nohup bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000
 nohup bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7511.229980 5 >> new.out
 nohup bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7533.481445 5 >> new.out
 mv performance.csv pmu_p1_L1MAG-performance.csv
-rm new.out
-
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 1.1509 5 >> new.out
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 4.1582 5 >> new.out
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 9.1517 5 >> new.out
-mv performance.csv cbf-performance.csv
-rm new.out
-
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 39.753071 5 >> new.out
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 40.759209 5 >> new.out
-nohup bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv 1000000 41.75766 5 >> new.out
-mv performance.csv dropoff_latitude-performance.csv
 rm new.out
 
 echo "done"
