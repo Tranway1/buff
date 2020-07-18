@@ -5,8 +5,8 @@ use std::io::{BufReader, BufRead};
 use time_series_start::knn::{slurp_file, classify};
 
 fn main() {
-    let training_set = slurp_file(&Path::new("../UCRArchive2018/CBF/CBF_TRAIN"));
-    let validation_sample = slurp_file(&Path::new("../UCRArchive2018/CBF/CBF_TRAIN"));
+    let training_set = slurp_file(&Path::new("../UCRArchive2018/CBF/CBF_TRAIN"),1);
+    let validation_sample = slurp_file(&Path::new("../UCRArchive2018/CBF/CBF_TEST"),1);
 
     let num_correct = validation_sample.iter()
         .filter(|x| {

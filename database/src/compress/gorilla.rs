@@ -245,8 +245,6 @@ impl GorillaBDCompress {
         // 1482892260 is the Unix timestamp of the start of the stream
         let mut encoder = GorillaEncoder::new(0, w);
 
-        let mut actual_datapoints:Vec<f64> = Vec::new();
-
         let mut t =0;
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);

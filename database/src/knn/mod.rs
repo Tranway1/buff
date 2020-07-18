@@ -3,6 +3,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use rust_decimal::prelude::FromStr;
+use crate::methods::prec_double::{get_precision_bound, PrecisionBound};
 
 pub struct LabelPixel {
     pub label: isize,
@@ -10,7 +11,9 @@ pub struct LabelPixel {
 }
 
 
-pub fn slurp_file(file: &Path) -> Vec<LabelPixel> {
+pub fn slurp_file(file: &Path, prec:i32) -> Vec<LabelPixel> {
+    let prec_delta = get_precision_bound(prec);
+    let mut bound = PrecisionBound::new(prec_delta);
     BufReader::new(File::open(file).unwrap())
         .lines()
         .skip(1)
@@ -22,7 +25,11 @@ pub fn slurp_file(file: &Path) -> Vec<LabelPixel> {
 
             LabelPixel {
                 label: iter.next().unwrap() as isize,
-                pixels: iter.collect()
+                pixels: iter.map(|x|{
+                    let bd = bound.precision_bound(x);
+                    // println!("before: {}, after: {}",x,bd);
+                    bd
+                }).collect()
             }
         })
         .collect()
