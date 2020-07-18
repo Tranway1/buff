@@ -43,6 +43,7 @@ pub mod client;
 mod query;
 pub mod compress;
 pub mod pscan;
+pub mod knn;
 // pub mod plot;
 mod tree;
 mod stats;

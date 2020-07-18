@@ -20,6 +20,10 @@ path = "src/compress/main.rs"
 name = "p_scan"
 path = "src/pscan/main.rs"
 
+[[bin]]
+name = "knn"
+path = "src/knn/main.rs"
+
 
 [dependencies]
 num = "0.2"

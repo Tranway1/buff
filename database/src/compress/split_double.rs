@@ -442,6 +442,13 @@ impl SplitBDDoubleCompress {
             chunk = bitpack.read_n_byte(len as usize).unwrap();
             if remain == 0 {
                 // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                // let mut iiter = int_vec.iter();
+                // let mut diter = dec_vec.iter();
+                // for cur_chunk in chunk.iter(){
+                //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                // }
+
+
                 for (int_comp,dec_comp,cur_chunk) in izip!(&int_vec,&dec_vec,chunk){
                     cur_intf = *int_comp as f64;
                     // if j<10{
