@@ -25,11 +25,16 @@ pub fn slurp_file(file: &Path, prec:i32) -> Vec<LabelPixel> {
 
             LabelPixel {
                 label: iter.next().unwrap() as isize,
-                pixels: iter.map(|x|{
-                    let bd = bound.precision_bound(x);
-                    // println!("before: {}, after: {}",x,bd);
-                    bd
-                }).collect()
+                pixels: {if prec<0 {
+                    iter.collect()
+                }else{
+                    iter.map(|x|{
+                        let bd = bound.precision_bound(x);
+                        // println!("before: {}, after: {}",x,bd);
+                        bd
+                    }).collect()
+                }
+                    }
             }
         })
         .collect()

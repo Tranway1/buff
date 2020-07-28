@@ -20,7 +20,7 @@ pub struct PrecisionBound {
     precision: f64,
     precision_exp : i32,
     int_length: u64,
-    decimal_length: u64
+    decimal_length: u64,
 }
 
 
@@ -157,7 +157,7 @@ impl PrecisionBound {
         // todo: check whether we can remove those if branch
         if exp>=0{
             dec_part = bdu << (12 + exp) as u64;
-            int_part = (((bdu << 12) >> 1)| FIRST_ONE )>> (11+52-exp) as u64;
+            int_part = ((bdu << 11)| FIRST_ONE )>> (63-exp) as u64;
             if sign!=0{
                 int_part = !int_part;
                 dec_part = !dec_part + 1;
@@ -180,6 +180,27 @@ impl PrecisionBound {
         //let signed_int = bd.trunc() as i64;
         (signed_int, dec_part >> 64u64-self.decimal_length)
     }
+
+
+    ///byte aligned version of spilt double
+    #[inline]
+    pub fn fetch_fixed_aligned(&self, bd:f64) -> i64{
+        let bdu = unsafe { mem::transmute::<f64, u64>(bd) };
+        let exp = ((bdu & EXP_MASK) >> 52) as i32 - 1023 as i32;
+        let sign = bdu&FIRST_ONE;
+        let mut fixed = 0u64;
+        if exp<self.precision_exp{
+            fixed = 0u64;
+        }else{
+            fixed = ((bdu << (11)) | FIRST_ONE) >> (63-exp-self.decimal_length as i32) as u64;
+        }
+        if sign!=0{
+            fixed = !(fixed-1);
+        }
+        let signed_int = unsafe { mem::transmute::<u64, i64>(fixed) };
+        signed_int
+    }
+
 
     pub fn finer(&self, input:f64) -> Vec<u8>{
         print!("finer results:");
