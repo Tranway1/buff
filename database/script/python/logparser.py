@@ -27,6 +27,7 @@ decthr = 0.0
 filterthr = 0.0
 eqthr =0.0
 sum = 0.0
+max = 0.0
 with open(outfile, 'w+') as the_file:
     with open(infile) as f:
         content = f.readlines()
@@ -50,6 +51,7 @@ with open(outfile, 'w+') as the_file:
                 filterthr += float(arr[12])
                 eqthr += float(arr[13])
                 sum += float(arr[14])
+                max += float(arr[15])
                 # the_file.write("%s\n" % cur)
                 if i==time:
                     paramters = arr[:6]
@@ -59,6 +61,7 @@ with open(outfile, 'w+') as the_file:
                     paramters.append(str(filterthr/time))
                     paramters.append(str(eqthr/time))
                     paramters.append(str(sum/time))
+                    paramters.append(str(max/time))
                     overview =','.join([str(x) for x in paramters])
                     the_file.write("%s\n" % overview)
                     i = 0
@@ -68,4 +71,5 @@ with open(outfile, 'w+') as the_file:
                     filterthr = 0.0
                     eqthr = 0.0
                     sum = 0.0
+                    max = 0.0
                 cur=""

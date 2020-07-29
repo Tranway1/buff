@@ -38,6 +38,7 @@ pub fn run_bpsplit_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq= compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in bpsplit compress function() is: {:?}", duration1);
 
@@ -61,16 +62,21 @@ pub fn run_bpsplit_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in bpsplit sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in bpsplit max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
-
-
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -89,6 +95,7 @@ pub fn run_bp_double_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in bp_double compress function() is: {:?}", duration1);
 
@@ -112,14 +119,20 @@ pub fn run_bp_double_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in bp_double sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in bp_double max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
 
     )
 }
@@ -138,6 +151,7 @@ pub fn run_sprintz_double_encoding_decoding(test_file:&str, scl:usize,pred: f64)
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in sprintz_double compress function() is: {:?}", duration1);
 
@@ -161,14 +175,20 @@ pub fn run_sprintz_double_encoding_decoding(test_file:&str, scl:usize,pred: f64)
     let duration5 = start5.elapsed();
     println!("Time elapsed in sprintz sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in sprintz max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -187,6 +207,7 @@ pub fn run_splitbd_byte_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in splitbd byte compress function() is: {:?}", duration1);
 
@@ -210,13 +231,20 @@ pub fn run_splitbd_byte_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in byte_splitbd sum function() is: {:?}", duration5);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    let start6 = Instant::now();
+    comp.byte_max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in byte_splitbd max function() is: {:?}", duration6);
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
 
 
     )
@@ -237,6 +265,7 @@ pub fn run_splitdouble_byte_encoding_decoding(test_file:&str, scl:usize,pred: f6
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in splitbd byte compress function() is: {:?}", duration1);
 
@@ -260,19 +289,26 @@ pub fn run_splitdouble_byte_encoding_decoding(test_file:&str, scl:usize,pred: f6
     let duration5 = start5.elapsed();
     println!("Time elapsed in byte_splitbd sum function() is: {:?}", duration5);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    let start6 = Instant::now();
+    comp.byte_fixed_max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in byte_splitbd max function() is: {:?}", duration6);
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
 
 
     )
 }
 
-pub fn run_splitbd_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
+pub fn run_splitdouble_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
     let file_vec: Vec<f64> = file_iter.unwrap()
         .map(|x| (x*SCALE))
@@ -287,6 +323,7 @@ pub fn run_splitbd_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in splitbd compress function() is: {:?}", duration1);
 
@@ -310,14 +347,20 @@ pub fn run_splitbd_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in splitbd sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in splitbd max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -335,6 +378,7 @@ pub fn run_gorillabd_encoding_decoding(test_file:&str, scl:usize,pred: f64 ) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in gorillabd compress function() is: {:?}", duration1);
     let start2 = Instant::now();
@@ -355,14 +399,20 @@ pub fn run_gorillabd_encoding_decoding(test_file:&str, scl:usize,pred: f64 ) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in gorillabd sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in gorillabd max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -380,6 +430,7 @@ pub fn run_gorilla_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in gorilla compress function() is: {:?}", duration1);
 
@@ -403,14 +454,20 @@ pub fn run_gorilla_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in gorilla sum function() is: {:?}", duration5);
 
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in gorilla max function() is: {:?}", duration6);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -428,6 +485,7 @@ pub fn run_gzip_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in gzip compress function() is: {:?}", duration1);
     //test_grilla_compress_on_file::<f64>(TEST_FILE);
@@ -450,13 +508,20 @@ pub fn run_gzip_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in gzip sum function() is: {:?}", duration5);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in gzip max function() is: {:?}", duration6);
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -474,6 +539,7 @@ pub fn run_snappy_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
     let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
     let comp_size = compressed.len();
     println!("Time elapsed in snappy compress function() is: {:?}", duration1);
     //test_grilla_compress_on_file::<f64>(TEST_FILE);
@@ -496,13 +562,20 @@ pub fn run_snappy_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let duration5 = start5.elapsed();
     println!("Time elapsed in snappy sum function() is: {:?}", duration5);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    let start6 = Instant::now();
+    comp.max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in snappy max function() is: {:?}", duration6);
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 
@@ -645,13 +718,44 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
     println!("sum is: {:?}",sum);
     println!("Time elapsed in parquet sum is: {:?}",duration4);
 
-    println!("Performance:{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    // profile max
+    let file5 = File::open(&path).unwrap();
+    let start5 = Instant::now();
+    let mut res = Bitmap::create();
+    let reader = SerializedFileReader::new(file5).unwrap();
+    let rg_meta = reader.metadata().row_group(0).clone();
+    let colmeta =  rg_meta.column(0).encodings();
+    println!("column encodings: {:?}", colmeta.as_slice());
+    let mut iter = reader.get_row_iter(None).unwrap();
+    let mut max_f = std::f64::MIN;
+    let mut cur = 0.0;
+    let mut i = 0;
+    while let Some(record) = iter.next() {
+        cur = record.get_double(0).unwrap();
+        if max_f < cur{
+            max_f = cur;
+            res.clear();
+            res.add(i)
+        }
+        else if max_f ==cur{
+            res.add(i);
+        }
+        i+=1;
+    }
+
+    let duration5 = start5.elapsed();
+    println!("Max: {:?}",max_f);
+    println!("Number of qualified items for max:{}", res.cardinality());
+    println!("Time elapsed in parquet max is: {:?}",duration5);
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
              1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
              1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
-             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0
+             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
     )
 }
 

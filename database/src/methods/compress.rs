@@ -360,12 +360,11 @@ impl GZipCompress {
         println!("sum is: {:?}",sum);
         sum
     }
-    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut s:Vec<u8> = Vec::new();
         let ct= gz.read_to_end(&mut s).unwrap();
         info!("size read:{}, original size:{}", ct, s.len());
-        let expected_datapoints:Vec<f64> = Vec::new();
         let mut res = Bitmap::create();
         let mut i = 0;
         match Segment::convert_from_bytes(&s) {
@@ -374,24 +373,21 @@ impl GZipCompress {
                 {
                     if (*e )>pred{
                         res.add(i);
-                        i+=1;
                     }
-
+                    i+=1;
                 }
             },
             _           => panic!("Failed to convert bytes into segment"),
         }
         // res.run_optimize();
         println!("Number of qualified items:{}", res.cardinality());
-        expected_datapoints
     }
 
-    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64){
         let mut gz = GzDecoder::new(&bytes[..]);
         let mut s:Vec<u8> = Vec::new();
         let ct= gz.read_to_end(&mut s).unwrap();
         info!("size read:{}, original size:{}", ct, s.len());
-        let expected_datapoints:Vec<f64> = Vec::new();
         let mut res = Bitmap::create();
         let mut i = 0;
         match Segment::convert_from_bytes(&s) {
@@ -400,16 +396,43 @@ impl GZipCompress {
                 {
                     if (*e )==pred{
                         res.add(i);
-                        i+=1;
                     }
-
+                    i+=1;
                 }
             },
             _           => panic!("Failed to convert bytes into segment"),
         }
         // res.run_optimize();
         println!("Number of qualified items for equal:{}", res.cardinality());
-        expected_datapoints
+    }
+
+    pub(crate) fn max(&self, bytes: Vec<u8>){
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        info!("size read:{}, original size:{}", ct, s.len());
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        let mut max =  std::f64::MIN;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if (*e )>max{
+                        max = *e;
+                        res.clear();
+                        res.add(i);
+                    }else if (*e )==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        // res.run_optimize();
+        println!("Max: {}", max);
+        println!("Number of qualified items for max:{}", res.cardinality());
     }
 }
 
@@ -630,10 +653,9 @@ impl SnappyCompress {
         sum
     }
 
-    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
         let mut snappy = decompress(bytes.as_slice());
         let mut s = snappy.unwrap();
-        let mut expected_datapoints:Vec<f64> = Vec::new();
         let mut res = Bitmap::create();
         let mut i = 0;
         match Segment::convert_from_bytes(&s) {
@@ -642,22 +664,19 @@ impl SnappyCompress {
                     {
                         if (*e )>pred{
                             res.add(i);
-                            i+=1;
                     }
-
+                        i+=1;
                 }
             },
             _           => panic!("Failed to convert bytes into segment"),
         }
         // res.run_optimize();
         println!("Number of qualified items:{}", res.cardinality());
-        expected_datapoints
     }
 
-    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64)  {
         let mut snappy = decompress(bytes.as_slice());
         let mut s = snappy.unwrap();
-        let mut expected_datapoints:Vec<f64> = Vec::new();
         let mut res = Bitmap::create();
         let mut i = 0;
         match Segment::convert_from_bytes(&s) {
@@ -666,16 +685,42 @@ impl SnappyCompress {
                 {
                     if (*e )==pred{
                         res.add(i);
-                        i+=1;
                     }
-
+                    i+=1;
                 }
             },
             _           => panic!("Failed to convert bytes into segment"),
         }
         // res.run_optimize();
         println!("Number of qualified items for equal:{}", res.cardinality());
-        expected_datapoints
+    }
+
+    pub(crate) fn max(&self, bytes: Vec<u8>)  {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        let mut max = std::f64::MIN;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if (*e )>max{
+                        max = *e;
+                        res.clear();
+                        res.add(i);
+                    }
+                    else if (*e )==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        // res.run_optimize();
+        println!("Max: {}",max);
+        println!("Number of qualified items for max:{}", res.cardinality());
     }
 }
 
@@ -963,6 +1008,91 @@ impl SplitDoubleCompress {
         println!("Number of qualified items for equal:{}", rb1.cardinality());
     }
 
+    pub(crate) fn max(&self, bytes: Vec<u8>) {
+        let dec_scl:f64 = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+
+        let mut max_int = u32::min_value();
+        let mut max_dec = u32::min_value();
+        let mut cur;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur > max_int {
+                max_int = cur;
+                rb1.clear();
+                rb1.add(i);
+            }
+            else if cur == max_int {
+                rb1.add(i);
+            }
+        }
+        rb1.run_optimize();
+        println!("Number of qualified int items:{}", res.cardinality());
+        if rb1.cardinality()!=0{
+            let mut iterator = rb1.iter();
+            // check the decimal part
+            let mut it = iterator.next();
+            let mut dec_cur = 0;
+            let mut dec_pre:u32 = 0;
+            let mut dec = 0;
+            let mut delta = 0;
+            if it!=None{
+                dec_cur = it.unwrap();
+                if dec_cur!=0{
+                    bitpack.skip(((dec_cur) * dlen) as usize);
+                }
+                dec = bitpack.read(dlen as usize).unwrap();
+                if dec > max_dec {
+                    max_dec = dec;
+                    res.clear();
+                    res.add(dec_cur);
+                }
+                else if dec==max_dec{
+                    res.add(dec_cur);
+                }
+                // println!("index qualified {}, decimal:{}",dec_cur,dec);
+                it = iterator.next();
+                dec_pre = dec_cur;
+            }
+            while it!=None{
+                dec_cur = it.unwrap();
+                //println!("index qualified {}",dec_cur);
+                delta = dec_cur-dec_pre;
+                if delta != 1 {
+                    bitpack.skip(((delta-1) * dlen) as usize);
+                }
+                dec = bitpack.read(dlen as usize).unwrap();
+                if dec > max_dec {
+                    max_dec = dec;
+                    res.clear();
+                    res.add(dec_cur);
+                }
+                else if dec==max_dec{
+                    res.add(dec_cur);
+                }
+                it = iterator.next();
+                dec_pre=dec_cur;
+            }
+        }
+        let max_f = (max_int as i32 + base_int) as f64 + (max_dec as f64) / dec_scl;
+        println!("Number of qualified items for max:{}", res.cardinality());
+        println!("Max:{}", max_f);
+    }
+
 }
 
 impl<'a, T> CompressionMethod<T> for SplitDoubleCompress
@@ -1055,6 +1185,36 @@ impl BPDoubleCompress {
         // println!("sum_int:{}, sum_f:{}",sum_int, sum);
         println!("sum is: {:?}",sum);
         sum
+    }
+
+    pub(crate) fn max(&self, bytes: Vec<u8>) -> f64{
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let mut res = Bitmap::create();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut max_int = u32::min_value();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            if cur >max_int{
+                max_int = cur;
+                res.clear();
+                res.add(i);
+            }
+            else if cur ==max_int {
+                res.add(i);
+            }
+        }
+        let max_f = (max_int as i32 + base_int ) as f64/scl;
+        println!("Max: {:?}",max_f);
+        println!("Number of qualified items for max:{}", res.cardinality());
+        max_f
     }
 
     pub(crate) fn range_filter(&self, bytes: Vec<u8>, pred:f64) {

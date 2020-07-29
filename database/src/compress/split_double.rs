@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use packed_simd::{u8x8,u8x16,u8x32};
 use crate::client::construct_file_iterator_skip_newline;
 use itertools::Itertools;
+use nalgebra::max;
 
 
 lazy_static! {
@@ -381,6 +382,7 @@ impl SplitBDDoubleCompress {
             for i in fixed_vec{
                 bitpack_vec.write_bits((i-base_fixed64) as u32, remain).unwrap();
             }
+            remain = 0;
         }
         else {
             bytec+=1;
@@ -653,9 +655,10 @@ impl SplitBDDoubleCompress {
 
         if remain<8{
             for i in 0..len {
-                cur = bitpack.read_bits(ilen as usize).unwrap();
+                cur = bitpack.read_bits(remain as usize).unwrap();
                 expected_datapoints.push((base_int + cur as i32) as f64 / dec_scl);
             }
+            remain=0
         }
         else {
             bytec+=1;
@@ -1395,6 +1398,105 @@ impl SplitBDDoubleCompress {
         println!("Number of qualified items:{}", res.cardinality());
     }
 
+    pub(crate) fn max(&self, bytes: Vec<u8>) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        // println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        // println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        // println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
+        let mut max_dec = u32::min_value();
+        let mut max_int = u32::min_value();
+        // let start = Instant::now();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            // if i<10{
+            //     println!("{}th value: {}",i,cur);
+            // }
+            if cur>max_int{
+                max_int = cur;
+                rb1.clear();
+                rb1.add(i);
+            }
+            else if cur == max_int {
+                rb1.add(i);
+            };
+        }
+        // rb1.run_optimize();
+        // res.run_optimize();
+        // let duration = start.elapsed();
+        // println!("Time elapsed in splitBD filtering int part is: {:?}", duration);
+        // println!("Number of qualified int items:{}", res.cardinality());
+        if rb1.cardinality()!=0{
+
+            // let start = Instant::now();
+            let mut iterator = rb1.iter();
+            // check the decimal part
+            let mut it = iterator.next();
+            let mut dec_cur = 0;
+            let mut dec_pre:u32 = 0;
+            let mut dec = 0;
+            let mut delta = 0;
+            if it!=None{
+                dec_cur = it.unwrap();
+                if dec_cur!=0{
+                    bitpack.skip(((dec_cur) * dlen) as usize);
+                }
+                dec = bitpack.read(dlen as usize).unwrap();
+                if dec>max_dec{
+                    max_dec = dec;
+                    res.clear();
+                    res.add(dec_cur);
+                }
+                else if dec == max_dec {
+                    res.add(dec_cur);
+                }
+                // println!("index qualified {}, decimal:{}",dec_cur,dec);
+                it = iterator.next();
+                dec_pre = dec_cur;
+            }
+            while it!=None{
+                dec_cur = it.unwrap();
+                //println!("index qualified {}",dec_cur);
+                delta = dec_cur-dec_pre;
+                if delta != 1 {
+                    bitpack.skip(((delta-1) * dlen) as usize);
+                }
+                dec = bitpack.read(dlen as usize).unwrap();
+                // if dec_cur<10{
+                //     println!("index qualified {}, decimal:{}",dec_cur,dec);
+                // }
+                if dec>max_dec{
+                    max_dec = dec;
+                    res.clear();
+                    res.add(dec_cur);
+                }
+                else if dec == max_dec {
+                    res.add(dec_cur);
+                }
+                it = iterator.next();
+                dec_pre=dec_cur;
+            }
+            // let duration = start.elapsed();
+            // println!("Time elapsed in splitBD filtering fraction part is: {:?}", duration);
+        }
+        let max_f = (max_int as i32+base_int) as f64 + max_dec as f64/2.0f64.powi(dlen as i32);
+        println!("Max: {}", max_f);
+        println!("Number of qualified max items:{}", res.cardinality());
+    }
+
     pub(crate) fn equal_filter(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -1633,6 +1735,177 @@ impl SplitBDDoubleCompress {
         }
 
         println!("Number of qualified items:{}", res.cardinality());
+    }
+
+
+    pub(crate) fn byte_max(&self, bytes: Vec<u8>) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        // println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        // println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        // println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain = dlen;
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
+
+        let mut max_int = u32::min_value();
+        let mut max_byte = u8::min_value();
+        let mut max_dec = 0u64;
+
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            if cur>max_int{
+                max_int = cur;
+                rb1.clear();
+                rb1.add(i);
+            }
+            else if cur == max_int {
+                rb1.add(i);
+            };
+        }
+        // println!("Number of qualified items in bitmap for max:{}", rb1.cardinality());
+        let mut byte_count = 0;
+        while (remain>0){
+            max_byte = u8::min_value();
+            // if we can read by byte
+            if remain>=8{
+                remain-=8;
+                byte_count+=1;
+                let mut cur_rb = Bitmap::create();
+                if rb1.cardinality()!=0{
+                    // let start = Instant::now();
+                    let mut iterator = rb1.iter();
+                    // check the decimal part
+                    let mut it = iterator.next();
+                    let mut dec_cur = 0;
+                    let mut dec_pre:u32 = 0;
+                    let mut dec = 0;
+                    let mut delta = 0;
+                    // try to get corresponding max byte;
+
+                    if it!=None{
+                        dec_cur = it.unwrap();
+                        if dec_cur!=0{
+                            bitpack.skip_n_byte((dec_cur) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        // println!("{} first match: {}", dec_cur, dec);
+                        if dec>max_byte{
+                            max_byte = dec;
+                            cur_rb.clear();
+                            cur_rb.add(dec_cur);
+                        }
+                        else if dec == max_byte{
+                            cur_rb.add(dec_cur);
+                        }
+                        it = iterator.next();
+                        dec_pre = dec_cur;
+                    }
+                    while it!=None{
+                        dec_cur = it.unwrap();
+                        delta = dec_cur-dec_pre;
+                        if delta != 1 {
+                            bitpack.skip_n_byte((delta-1) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        // if dec_cur<10{
+                        //     println!("{} first match: {}", dec_cur, dec);
+                        // }
+                        if dec>max_byte{
+                            max_byte = dec;
+                            cur_rb.clear();
+                            cur_rb.add(dec_cur);
+                        }
+                        else if dec == max_byte{
+                            cur_rb.add(dec_cur);
+                        }
+                        it = iterator.next();
+                        dec_pre=dec_cur;
+                    }
+                    if len - dec_pre>1 {
+                        bitpack.skip_n_byte(((len - dec_pre - 1)) as usize);
+                    }
+                }
+                else{
+                    bitpack.skip_n_byte((len) as usize);
+                    break;
+                }
+                rb1 = cur_rb;
+                max_dec = max_dec | ((max_byte as u64)<<remain as u64);
+                // println!("read the {}th byte of dec",byte_count);
+                // println!("Number of qualified items in bitmap:{}", rb1.cardinality());
+            }
+            // else we have to read by bits
+            else {
+                bitpack.finish_read_byte();
+                if rb1.cardinality()!=0{
+                    // let start = Instant::now();
+                    let mut iterator = rb1.iter();
+                    // check the decimal part
+                    let mut it = iterator.next();
+                    let mut dec_cur = 0;
+
+                    let mut dec_pre:u32 = 0;
+                    let mut dec = 0;
+                    let mut delta = 0;
+                    if it!=None{
+                        dec_cur = it.unwrap();
+                        if dec_cur!=0{
+                            bitpack.skip(((dec_cur) * remain) as usize);
+                        }
+                        dec = bitpack.read_bits(remain as usize).unwrap();
+                        if dec>max_byte{
+                            max_byte = dec;
+                            res.clear();
+                            res.add(dec_cur);
+                        }
+                        else if dec == max_byte{
+                            res.add(dec_cur);
+                        }
+                        it = iterator.next();
+                        dec_pre = dec_cur;
+                    }
+                    while it!=None{
+                        dec_cur = it.unwrap();
+                        delta = dec_cur-dec_pre;
+                        if delta != 1 {
+                            bitpack.skip(((delta-1) * remain) as usize);
+                        }
+                        dec = bitpack.read_bits(remain as usize).unwrap();
+                        if dec>max_byte{
+                            max_byte = dec;
+                            res.clear();
+                            res.add(dec_cur);
+                        }
+                        else if dec == max_byte{
+                            res.add(dec_cur);
+                        }
+                        it = iterator.next();
+                        dec_pre=dec_cur;
+                    }
+                    // println!("read the remain {} bits of dec",remain);
+                    remain = 0;
+                    max_dec = max_dec | (max_byte as u64);
+                }
+                else{
+                    break;
+                }
+            }
+        }
+        let max_f = (max_int as i32 +base_int) as f64 + (max_dec as f64)/2.0f64.powi(dlen as i32);
+        println!("Max: {}",max_f);
+        println!("Number of qualified max items:{}", res.cardinality());
     }
 
     pub(crate) fn byte_equal_filter(&self, bytes: Vec<u8>, pred:f64) {
@@ -2121,6 +2394,213 @@ impl SplitBDDoubleCompress {
             }
         }
         println!("Number of qualified int items:{}", res.cardinality());
+    }
+
+    pub(crate) fn byte_fixed_min(&self, bytes: Vec<u8>) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain =dlen+ilen;
+        bound.set_length(ilen as u64, dlen as u64);
+
+        let min_f = (base_int) as f64 / 2.0f64.powi(dlen as i32);
+        println!("Min value:{}", min_f);
+    }
+
+    pub(crate) fn byte_fixed_max(&self, bytes: Vec<u8>) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        // println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        // println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        // println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain =dlen+ilen;
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut rb1 = Bitmap::create();
+        let mut res = Bitmap::create();
+        let mut max = u64::min_value();
+
+        // println!("target value with integer part:{}, decimal part:{}",int_target,dec_target);
+        let mut byte_count = 0;
+        let mut byte_max = u8::min_value();
+        // let start = Instant::now();
+
+        if remain<8{
+            for i in 0..len {
+                cur = bitpack.read_bits(remain as usize).unwrap() as u64;
+                if cur >max{
+                    max = cur ;
+                    res.clear();
+                    res.add(i);
+                }
+                else if cur == max {
+                    res.add(i);
+                }
+            }
+            remain = 0;
+        }else {
+            remain-=8;
+            byte_count+=1;
+            let chunk = bitpack.read_n_byte(len as usize).unwrap();
+            let mut i =0;
+            for &c in chunk {
+                if c > byte_max {
+                    byte_max=c;
+                    rb1.clear();
+                    rb1.add(i);
+                }
+                else if c == byte_max {
+                    rb1.add(i);
+                }
+                i+=1;
+            }
+            max = (byte_max as u64) << (remain as u64);
+        }
+        // rb1.run_optimize();
+        // let duration = start.elapsed();
+        // println!("Time elapsed in splitBD filtering int part is: {:?}", duration);
+        // println!("Number of qualified items for max:{}", rb1.cardinality());
+
+        while (remain>0){
+            byte_max = u8::min_value();
+            // if we can read by byte
+            if remain>=8{
+                remain-=8;
+                byte_count+=1;
+
+                let mut dec_cur = 0;
+                let mut dec_pre:u32 = 0;
+                let mut dec = 0;
+                let mut delta = 0;
+                let mut cur_rb = Bitmap::create();
+
+                {
+                    let mut iterator = rb1.iter();
+                    // let start = Instant::now();
+                    // check the decimal part
+                    let mut it = iterator.next();
+                    // shift right to get corresponding byte
+                    if it!=None{
+                        dec_cur = it.unwrap();
+                        if dec_cur!=0{
+                            bitpack.skip_n_byte((dec_cur) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        // println!("{} first match: {}", dec_cur, dec);
+                        if dec > byte_max{
+                            byte_max = dec;
+                            cur_rb.add(dec_cur);
+                        }else if dec == byte_max {
+                            cur_rb.add(dec_cur);
+                        }
+                        it = iterator.next();
+                        dec_pre = dec_cur;
+                    }
+                    while it!=None{
+                        dec_cur = it.unwrap();
+                        delta = dec_cur-dec_pre;
+                        if delta != 1 {
+                            bitpack.skip_n_byte((delta-1) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        // if dec_cur<10{
+                        //     println!("{} first match: {}", dec_cur, dec);
+                        // }
+                        if dec > byte_max{
+                            byte_max = dec;
+                            cur_rb.clear();
+                            cur_rb.add(dec_cur);
+                        }else if dec == byte_max {
+                            cur_rb.add(dec_cur);
+                        }
+
+                        it = iterator.next();
+                        dec_pre=dec_cur;
+                    }
+                    if len - dec_pre>1 {
+                        bitpack.skip_n_byte(((len - dec_pre - 1)) as usize);
+                    }
+                }
+                max = max | ((byte_max as u64)<< remain);
+                rb1 = cur_rb;
+                // println!("read the {}th byte of dec",byte_count);
+                // println!("Number of qualified items in bitmap:{}", rb1.cardinality());
+            }
+            // else we have to read by bits
+            else {
+                byte_max = u8::min_value();
+                bitpack.finish_read_byte();
+                // let start = Instant::now();
+                let mut iterator = rb1.iter();
+                // check the decimal part
+                let mut it = iterator.next();
+                let mut dec_cur = 0;
+
+                let mut dec_pre:u32 = 0;
+                let mut dec = 0;
+                let mut delta = 0;
+                if it!=None{
+                    dec_cur = it.unwrap();
+                    if dec_cur!=0{
+                        bitpack.skip(((dec_cur) * remain) as usize);
+                    }
+                    dec = bitpack.read_bits(remain as usize).unwrap();
+                    if dec>byte_max{
+                        byte_max = dec;
+                        res.add(dec_cur);
+                    }
+                    else if dec == byte_max {
+                        res.add(dec_cur);
+                    }
+
+                    it = iterator.next();
+                    dec_pre = dec_cur;
+                }
+                while it!=None{
+                    dec_cur = it.unwrap();
+                    delta = dec_cur-dec_pre;
+                    if delta != 1 {
+                        bitpack.skip(((delta-1) * remain) as usize);
+                    }
+                    dec = bitpack.read_bits(remain as usize).unwrap();
+                    if dec>byte_max{
+                        byte_max = dec;
+                        res.clear();
+                        res.add(dec_cur);
+                    }
+                    else if dec==byte_max{
+                        res.add(dec_cur);
+                    }
+                    it = iterator.next();
+                    dec_pre=dec_cur;
+                }
+                // println!("read the remain {} bits of dec",remain);
+                remain = 0;
+                max = max | (byte_max as u64);
+            }
+        }
+        let max_f = (max as i32+base_int) as f64 / 2.0f64.powi(dlen as i32);
+        println!("Number of qualified max items:{}", res.cardinality());
+        println!("Max value:{}", max_f);
     }
 
     pub(crate) fn simd_range_filter(&self, bytes: Vec<u8>,pred:f64) {

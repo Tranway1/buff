@@ -120,11 +120,10 @@ impl GorillaCompress {
     }
 
 
-    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
 
-        let mut expected_datapoints:Vec<f64> = Vec::new();
         println!("predicate:{} ", pred);
         let mut done = false;
         let mut i=0;
@@ -156,14 +155,12 @@ impl GorillaCompress {
         }
         // res.run_optimize();
         println!("Number of qualified items:{}", res.cardinality());
-        expected_datapoints
     }
 
-    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64) -> Vec<f64> {
+    pub(crate) fn equal_filter(&self, bytes: Vec<u8>,pred:f64) {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
 
-        let mut expected_datapoints:Vec<f64> = Vec::new();
         println!("predicate:{} ", pred);
         let mut done = false;
         let mut i=0;
@@ -195,7 +192,47 @@ impl GorillaCompress {
         }
         // res.run_optimize();
         println!("Number of qualified items for equal:{}", res.cardinality());
-        expected_datapoints
+    }
+
+    pub(crate) fn max(&self, bytes: Vec<u8>) {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut max =std::f64::MIN;
+
+        let mut done = false;
+        let mut i=0;
+        let mut res = Bitmap::create();
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    if dp>max {
+                        max = dp;
+                        res.clear();
+                        res.add(i);
+                    }
+                    else if dp==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        println!("Max: {}",max);
+        println!("Number of qualified items for max:{}", res.cardinality());
     }
 
 }
@@ -336,15 +373,13 @@ impl GorillaBDCompress {
         sum
     }
 
-    pub(crate) fn range_filter(&self, bytes: Vec<u8>, pred:f64) -> Vec<f64> {
+    pub(crate) fn range_filter(&self, bytes: Vec<u8>, pred:f64) {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
         let mut bound = PrecisionBound::new(prec_delta);
         let target = bound.precision_bound(pred);
-
-        let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
         let mut i=0;
@@ -377,18 +412,15 @@ impl GorillaBDCompress {
         }
         // res.run_optimize();
         println!("Number of qualified items:{}", res.cardinality());
-        expected_datapoints
     }
 
-    pub(crate) fn equal_filter(&self, bytes: Vec<u8>, pred:f64) -> Vec<f64> {
+    pub(crate) fn equal_filter(&self, bytes: Vec<u8>, pred:f64) {
         let r = BufferedReader::new(bytes.into_boxed_slice());
         let mut decoder = GorillaDecoder::new(r);
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
         let mut bound = PrecisionBound::new(prec_delta);
         let target = bound.precision_bound(pred);
-
-        let mut expected_datapoints:Vec<f64> = Vec::new();
 
         let mut done = false;
         let mut i=0;
@@ -421,7 +453,50 @@ impl GorillaBDCompress {
         }
         // res.run_optimize();
         println!("Number of qualified items for equal:{}", res.cardinality());
-        expected_datapoints
+    }
+
+    pub(crate) fn max(&self, bytes: Vec<u8>) {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+
+        let mut max = std::f64::MIN;
+
+        let mut done = false;
+        let mut i=0;
+        let mut isqualify = true;
+        let mut res = Bitmap::create();
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    if dp>max {
+                        max = dp;
+                        res.clear();
+                        res.add(i);
+                    }else if dp==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        // res.run_optimize();
+        println!("Max: {}",max);
+        println!("Number of qualified items for max:{}", res.cardinality());
+
     }
 }
 

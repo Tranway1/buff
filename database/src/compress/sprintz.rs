@@ -88,6 +88,41 @@ impl SprintzDoubleCompress {
 
     }
 
+    pub(crate) fn max(&self, bytes: Vec<u8>) {
+        let scl = self.scale as f64;
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(8).unwrap();
+        let mut res = Bitmap::create();
+        // check integer part and update bitmap;
+        let mut cur;
+        let mut pre = base_int;
+        let mut delta = 0i32;
+        let mut cur_int = 0i32;
+        let mut max_int = i64::min_value();
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            delta = unzigzag(cur);
+            cur_int = pre+delta;
+            if cur_int as i64 > max_int{
+                max_int =  cur_int as i64;
+                res.clear();
+                res.add(i);
+            }
+            else if cur_int as i64 == max_int {
+                res.add(i);
+            }
+            pre = cur_int;
+        }
+        let max_f = max_int as f64/scl;
+        println!("Max: {:?}",max_f);
+        println!("Number of qualified items for max:{}", res.cardinality());
+    }
+
     pub fn range_filter(&self, bytes: Vec<u8>,pred:f64) {
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let ubase_int = bitpack.read(32).unwrap();
