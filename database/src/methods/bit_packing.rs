@@ -349,6 +349,12 @@ impl BitPack<Vec<u8>> {
 
 
     #[inline]
+    pub fn write_bytes(&mut self, value: &mut Vec<u8>) -> Result<(), usize> {
+        self.buff.append(value);
+        Ok(())
+    }
+
+    #[inline]
     pub fn write_byte(&mut self, value: u8) -> Result<(), usize> {
         self.buff.push(value);
         Ok(())
@@ -831,6 +837,13 @@ fn test_zigzag(){
     assert_eq!(unzigzag(zigzag(-1)),-1);
     assert_eq!(unzigzag(zigzag(100)),100);
     assert_eq!(unzigzag(zigzag(-100)),-100);
+}
+
+#[test]
+fn test_to_bytes(){
+    let value: u32 = 0x1FFFF;
+    let bytes = value.to_be_bytes();
+    println!("{:?}" , bytes);
 }
 
 #[test]

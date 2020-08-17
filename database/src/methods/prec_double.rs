@@ -160,7 +160,10 @@ impl PrecisionBound {
             int_part = ((bdu << 11)| FIRST_ONE )>> (63-exp) as u64;
             if sign!=0{
                 int_part = !int_part;
-                dec_part = !dec_part + 1;
+                // this is an approximation for simplification.
+                // dec_part = !dec_part;
+                // more accurate representation
+                dec_part = !dec_part+1;
             }
         }else if exp<self.precision_exp{
             dec_part=0u64;
@@ -193,9 +196,9 @@ impl PrecisionBound {
             fixed = 0u64;
         }else{
             fixed = ((bdu << (11)) | FIRST_ONE) >> (63-exp-self.decimal_length as i32) as u64;
-        }
-        if sign!=0{
-            fixed = !(fixed-1);
+            if sign!=0{
+                fixed = !(fixed-1);
+            }
         }
         let signed_int = unsafe { mem::transmute::<u64, i64>(fixed) };
         signed_int
@@ -515,7 +518,31 @@ fn test_getlength4decimal() {
 
 
 
+#[test]
+fn test_bitmap_serialize() {
+    use croaring::Bitmap;
 
+    let mut bitmap: Bitmap = (100..800).collect();
+    println!("bitmap size without compression: {}",bitmap.get_serialized_size_in_bytes());
+
+    assert_eq!(bitmap.cardinality(), 700);
+    assert!(bitmap.run_optimize());
+    println!("bitmap size with compression: {}",bitmap.get_serialized_size_in_bytes());
+    let ser = bitmap.serialize();
+    let mut bitmap_new = Bitmap::deserialize(&ser);
+    assert_eq!(bitmap_new.cardinality(), 700);
+    println!("deserialize bitmap size with compression: {}",bitmap_new.get_serialized_size_in_bytes());
+    bitmap_new.remove_run_compression();
+    println!("deserialize bitmap size with decompression: {}",bitmap_new.get_serialized_size_in_bytes());
+    bitmap_new.flip_inplace(1..801);
+    assert_eq!(bitmap_new.cardinality(), 100);
+    println!("bitmap size without compression: {}",bitmap_new.get_serialized_size_in_bytes());
+    assert!(bitmap_new.run_optimize());
+    println!("bitmap size with compression: {}",bitmap_new.get_serialized_size_in_bytes());
+
+
+
+}
 
 #[test]
 fn test_bitmap() {
