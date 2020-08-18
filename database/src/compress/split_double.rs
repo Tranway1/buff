@@ -529,13 +529,13 @@ impl SplitBDDoubleCompress {
             let zero_bytes = ilen/BYTE_BITS;
             let adjusted = zero_bytes*BYTE_BITS;
             let ol_conter = (SAMPLE as f32 * OUTLIER_R) as u32;
-            let mut cols_outlier:u8 = 0;
+            let mut cols_outlier:u32 = 0;
             println!("outlier ratio: {}",ol_conter);
             for i in 0..adjusted{
-                println!("{}: {}",i, bits_counter[i]);
+                // println!("{}: {}",i, bits_counter[i]);
                 sum += bits_counter[i];
                 if i%BYTE_BITS == (BYTE_BITS-1) {
-                    println!("sum: {}",sum);
+                    // println!("sum: {}",sum);
                     if sum<ol_conter{
                         cols_outlier += 1;
                     }
@@ -544,12 +544,12 @@ impl SplitBDDoubleCompress {
                     }
                 }
             }
-            println!("sub column for outlier: {}",cols_outlier);
 
             let mut outlier = Vec::new();
             if cols_outlier>0{
                 // write number of outlier cols
-                bitpack_vec.write_byte(cols_outlier);
+                println!("sub column for outlier: {}",cols_outlier);
+                bitpack_vec.write(cols_outlier, 8);
                 let mut cur_u64 = 0u64;
                 let mut cur_u8 = 0u8;
                 let mut fixed_u64 = Vec::new();
@@ -568,7 +568,7 @@ impl SplitBDDoubleCompress {
                     ind += 1;
                     cur_u64
                 }).collect_vec();
-                cols_outlier -= 1;
+
                 let mut n_outlier = bm_outlier.cardinality() as u32;
                 bm_outlier.run_optimize();
                 let mut bm_vec = bm_outlier.serialize();
@@ -578,10 +578,13 @@ impl SplitBDDoubleCompress {
                 // write the serialized bitmap size before the serialized bitmap.
                 bitpack_vec.write(bm_size,32);
                 bitpack_vec.write_bytes(&mut bm_vec);
+                bitpack_vec.finish_write_byte();
 
                 // write the number of outlier before the actual outlier values
                 bitpack_vec.write(n_outlier,32);
                 bitpack_vec.write_bytes(&mut outlier);
+                bitpack_vec.finish_write_byte();
+                cols_outlier -= 1;
 
                 for round in 0..cols_outlier{
                     bm_outlier.clear();
@@ -607,65 +610,37 @@ impl SplitBDDoubleCompress {
                     // write the serialized bitmap size before the serialized bitmap.
                     bitpack_vec.write(bm_size,32);
                     bitpack_vec.write_bytes(&mut bm_vec);
+                    bitpack_vec.finish_write_byte();
 
                     // write the number of outlier before the actual outlier values
                     bitpack_vec.write(n_outlier,32);
                     bitpack_vec.write_bytes(&mut outlier);
+                    bitpack_vec.finish_write_byte();
 
                 }
-
-                if remain<8{
-                    for i in fixed_vec{
-                        bitpack_vec.write_bits((i-base_fixed64) as u32, remain).unwrap();
-                    }
-                    remain = 0;
-                }
-                else {
+                while (remain>=8){
                     bytec+=1;
                     remain -= 8;
-                    let mut fixed_u64 = Vec::new();
-                    let mut cur_u64 = 0u64;
                     if remain>0{
-                        // let mut k = 0;
-                        fixed_u64 = fixed_vec.iter().map(|x|{
-                            cur_u64 = (*x-base_fixed64) as u64;
-                            bitpack_vec.write_byte((cur_u64>>remain) as u8);
-                            cur_u64
-                        }).collect_vec();
+                        for d in &fixed_u64 {
+                            bitpack_vec.write_byte((*d >>remain) as u8).unwrap();
+                        }
                     }
                     else {
-                        fixed_u64 = fixed_vec.iter().map(|x|{
-                            cur_u64 = (*x-base_fixed64) as u64;
-                            bitpack_vec.write_byte((cur_u64) as u8);
-                            cur_u64
-                        }).collect_vec();
+                        for d in &fixed_u64 {
+                            bitpack_vec.write_byte(*d as u8).unwrap();
+                        }
                     }
+
+
                     println!("write the {}th byte of dec",bytec);
-
-                    while (remain>=8){
-                        bytec+=1;
-                        remain -= 8;
-                        if remain>0{
-                            for d in &fixed_u64 {
-                                bitpack_vec.write_byte((*d >>remain) as u8).unwrap();
-                            }
-                        }
-                        else {
-                            for d in &fixed_u64 {
-                                bitpack_vec.write_byte(*d as u8).unwrap();
-                            }
-                        }
-
-
-                        println!("write the {}th byte of dec",bytec);
+                }
+                if (remain>0){
+                    bitpack_vec.finish_write_byte();
+                    for d in fixed_u64 {
+                        bitpack_vec.write_bits(d as u32, remain as usize).unwrap();
                     }
-                    if (remain>0){
-                        bitpack_vec.finish_write_byte();
-                        for d in fixed_u64 {
-                            bitpack_vec.write_bits(d as u32, remain as usize).unwrap();
-                        }
-                        println!("write remaining {} bits of dec",remain);
-                    }
+                    println!("write remaining {} bits of dec",remain);
                 }
             }
             else{
@@ -725,9 +700,6 @@ impl SplitBDDoubleCompress {
                     }
                 }
             }
-
-
-
 
         }
         else{
@@ -1107,6 +1079,264 @@ impl SplitBDDoubleCompress {
     }
 
 
+    pub fn byte_residue_decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk;
+
+        // check if there are potential outiler cols
+        if ilen>15 {
+            let outlier_cols = bitpack.read(8).unwrap();
+            println!("number of outlier cols:{}",outlier_cols);
+
+            // if there are outlier cols, then read outlier cols first
+            if outlier_cols>0{
+                fixed_vec = vec![0u64; len as usize];
+                for round in 0..outlier_cols{
+                    bytec+=1;
+                    remain -= 8;
+                    let bm_len = bitpack.read(32).unwrap() as usize;
+                    println!("bitmap length: {}",bm_len);
+                    let bm_mat = bitpack.read_n_byte(bm_len).unwrap();
+                    let mut bitmap_outlier = Bitmap::deserialize(bm_mat);
+                    bitpack.finish_read_byte();
+
+                    let n_outlier = bitpack.read(32).unwrap() as usize;
+                    let outliers = bitpack.read_n_byte(n_outlier).unwrap();
+                    let mut outlier_iter = outliers.iter();
+                    let mut outlier_value = outlier_iter.next().unwrap();
+
+                    let mut bm_iterator = bitmap_outlier.iter();
+                    println!("bitmap cardinaliry: {}",bitmap_outlier.cardinality());
+                    let mut ind = bm_iterator.next().unwrap();
+
+                    let mut i = 0;
+                    let mut counter = 0;
+                    for x in fixed_vec.iter_mut() {
+                        if i==ind{
+                            *x = (*x)|(((*outlier_value) as u64)<<remain);
+                            counter+=1;
+                            if counter==n_outlier{
+                                break
+                            }
+                            ind = bm_iterator.next().unwrap();
+                            outlier_value = outlier_iter.next().unwrap();
+                        }
+                        i += 1;
+                    }
+                    bitpack.finish_read_byte();
+                    println!("read the {}th byte of outlier",bytec);
+                }
+
+                while (remain>=8){
+                    bytec+=1;
+                    remain -= 8;
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    if remain == 0 {
+                        // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                        // let mut iiter = int_vec.iter();
+                        // let mut diter = dec_vec.iter();
+                        // for cur_chunk in chunk.iter(){
+                        //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                        // }
+
+                        for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
+                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                        }
+                    }
+                    else{
+                        let mut it = chunk.into_iter();
+                        fixed_vec=fixed_vec.into_iter().map(|x| x|((*(it.next().unwrap()) as u64)<<remain)).collect();
+                    }
+                    println!("read the {}th byte of dec",bytec);
+                }
+                // let duration = start.elapsed();
+                // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+                // let start5 = Instant::now();
+                if (remain>0){
+                    bitpack.finish_read_byte();
+                    println!("read remaining {} bits of dec",remain);
+                    println!("length for fixed:{}", fixed_vec.len());
+                    for cur_fixed in fixed_vec.into_iter(){
+                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                    }
+                }
+
+            }
+            else {
+                if remain<8{
+                    for i in 0..len {
+                        cur = bitpack.read_bits(remain as usize).unwrap();
+                        expected_datapoints.push((base_int + cur as i32) as f64 / dec_scl);
+                    }
+                    remain=0
+                }
+                else {
+                    bytec+=1;
+                    remain -= 8;
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    if remain == 0 {
+                        for &x in chunk {
+                            expected_datapoints.push((base_int + x as i32) as f64 / dec_scl);
+                        }
+                    }
+                    else{
+                        // dec_vec.push((bitpack.read_byte().unwrap() as u32) << remain);
+                        // let mut k = 0;
+                        for x in chunk{
+                            // if k<10{
+                            //     println!("write {}th value with first byte {}",k,(*x))
+                            // }
+                            // k+=1;
+                            fixed_vec.push(((*x) as u64)<<remain)
+                        }
+                    }
+                    println!("read the {}th byte of dec",bytec);
+
+                    while (remain>=8){
+                        bytec+=1;
+                        remain -= 8;
+                        chunk = bitpack.read_n_byte(len as usize).unwrap();
+                        if remain == 0 {
+                            // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                            // let mut iiter = int_vec.iter();
+                            // let mut diter = dec_vec.iter();
+                            // for cur_chunk in chunk.iter(){
+                            //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                            // }
+
+                            for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
+                                expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                            }
+                        }
+                        else{
+                            let mut it = chunk.into_iter();
+                            fixed_vec=fixed_vec.into_iter().map(|x| x|((*(it.next().unwrap()) as u64)<<remain)).collect();
+                        }
+
+
+                        println!("read the {}th byte of dec",bytec);
+                    }
+                    // let duration = start.elapsed();
+                    // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+                    // let start5 = Instant::now();
+                    if (remain>0){
+                        bitpack.finish_read_byte();
+                        println!("read remaining {} bits of dec",remain);
+                        println!("length for fixed:{}", fixed_vec.len());
+                        for cur_fixed in fixed_vec.into_iter(){
+                            expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            if remain<8{
+                for i in 0..len {
+                    cur = bitpack.read_bits(remain as usize).unwrap();
+                    expected_datapoints.push((base_int + cur as i32) as f64 / dec_scl);
+                }
+                remain=0
+            }
+            else {
+                bytec+=1;
+                remain -= 8;
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                if remain == 0 {
+                    for &x in chunk {
+                        expected_datapoints.push((base_int + x as i32) as f64 / dec_scl);
+                    }
+                }
+                else{
+                    // dec_vec.push((bitpack.read_byte().unwrap() as u32) << remain);
+                    // let mut k = 0;
+                    for x in chunk{
+                        // if k<10{
+                        //     println!("write {}th value with first byte {}",k,(*x))
+                        // }
+                        // k+=1;
+                        fixed_vec.push(((*x) as u64)<<remain)
+                    }
+                }
+                println!("read the {}th byte of dec",bytec);
+
+                while (remain>=8){
+                    bytec+=1;
+                    remain -= 8;
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    if remain == 0 {
+                        // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                        // let mut iiter = int_vec.iter();
+                        // let mut diter = dec_vec.iter();
+                        // for cur_chunk in chunk.iter(){
+                        //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                        // }
+
+                        for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
+                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                        }
+                    }
+                    else{
+                        let mut it = chunk.into_iter();
+                        fixed_vec=fixed_vec.into_iter().map(|x| x|((*(it.next().unwrap()) as u64)<<remain)).collect();
+                    }
+
+
+                    println!("read the {}th byte of dec",bytec);
+                }
+                // let duration = start.elapsed();
+                // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+                // let start5 = Instant::now();
+                if (remain>0){
+                    bitpack.finish_read_byte();
+                    println!("read remaining {} bits of dec",remain);
+                    println!("length for fixed:{}", fixed_vec.len());
+                    for cur_fixed in fixed_vec.into_iter(){
+                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                    }
+                }
+            }
+        }
+
+
+        // for i in 0..10{
+        //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())
+        // }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+
     pub fn sum_with_precision(&self, bytes: Vec<u8>, precision:u32) -> f64{
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -1381,6 +1611,203 @@ impl SplitBDDoubleCompress {
             println!("sum remaining {} bits of fixed number, which is {}",remain,sum_fixed);
             sum = sum+(sum_fixed as f64)/dec_scl;
         }
+        sum+= sum_base as f64;
+        println!("sum is: {:?}",sum);
+        sum
+    }
+
+
+    pub fn byte_residue_sum(&self, bytes: Vec<u8>) -> f64{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+
+        let mut remain = ilen+dlen;
+        let mut processed = 0;
+        let mut sum_base:f64 = len as f64 * base_int as f64;
+        let mut sum_fixed:u64 = 0;
+        let mut sum = 0.0f64;
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        sum_base = sum_base/dec_scl;
+        // println!("Scale for decimal:{}", dec_scl);
+
+        let mut bytec = 0;
+        let mut chunk;
+
+        if ilen>15{
+
+            let outlier_cols = bitpack.read(8).unwrap();
+            println!("number of outlier cols:{}",outlier_cols);
+
+            // if there are outlier cols, then read outlier cols first
+            if outlier_cols>0 {
+                for round in 0..outlier_cols {
+                    bytec += 1;
+                    remain -= 8;
+                    processed += 8;
+                    let bm_len = bitpack.read(32).unwrap() as usize;
+                    println!("bitmap length: {}", bm_len);
+                    let bm_mat = bitpack.read_n_byte(bm_len).unwrap();
+                    bitpack.finish_read_byte();
+
+                    let n_outlier = bitpack.read(32).unwrap() as usize;
+                    let outliers = bitpack.read_n_byte(n_outlier).unwrap();
+
+                    println!("outlier number: {}", outliers.len());
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+
+                    for otlier in outliers.iter(){
+                        sum_fixed += (*otlier) as u64;
+                    }
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                    println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                    sum_fixed=0;
+                    println!("now sum :{}", sum);
+                    bitpack.finish_read_byte();
+                }
+                while (remain>=8){
+                    bytec+=1;
+                    remain -= 8;
+                    processed += 8;
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    for dec_comp in chunk.iter(){
+                        sum_fixed += (*dec_comp) as u64;
+                    }
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                    println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                    sum_fixed=0;
+                    println!("now sum :{}", sum);
+                    if remain == 0 {
+                        return sum
+                    }
+                }
+                if (remain>0){
+                    // let mut j =0;
+                    if processed>=8{
+                        bitpack.finish_read_byte();
+                    }
+                    processed += remain as i32;
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                    for i in 0..len {
+                        sum_fixed += (bitpack.read_bits( remain as usize).unwrap() as u64);
+                    }
+                    println!("sum remaining {} bits of fixed number, which is {}",remain,sum_fixed);
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                }
+            }
+            else {
+                if (remain>=8){
+                    bytec+=1;
+                    remain -= 8;
+                    processed += 8;
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    for dec_comp in chunk.iter(){
+                        sum_fixed += (*dec_comp) as u64;
+                    }
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                    println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                    sum_fixed=0;
+                    println!("now sum :{}", sum);
+                    if remain == 0 {
+                        return sum
+                    }
+                }
+                while (remain>=8){
+                    bytec+=1;
+                    remain -= 8;
+                    processed += 8;
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                    chunk = bitpack.read_n_byte(len as usize).unwrap();
+                    for dec_comp in chunk.iter(){
+                        sum_fixed += (*dec_comp) as u64;
+                    }
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                    println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                    sum_fixed=0;
+                    println!("now sum :{}", sum);
+                    if remain == 0 {
+                        return sum
+                    }
+                }
+                if (remain>0){
+                    // let mut j =0;
+                    if processed>=8{
+                        bitpack.finish_read_byte();
+                    }
+                    processed += remain as i32;
+                    dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                    for i in 0..len {
+                        sum_fixed += (bitpack.read_bits( remain as usize).unwrap() as u64);
+                    }
+                    println!("sum remaining {} bits of fixed number, which is {}",remain,sum_fixed);
+                    sum = sum+(sum_fixed as f64)/dec_scl;
+                }
+            }
+        }
+        else{
+            if (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                for dec_comp in chunk.iter(){
+                    sum_fixed += (*dec_comp) as u64;
+                }
+                sum = sum+(sum_fixed as f64)/dec_scl;
+                println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                sum_fixed=0;
+                println!("now sum :{}", sum);
+                if remain == 0 {
+                    return sum
+                }
+            }
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                processed += 8;
+                dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                for dec_comp in chunk.iter(){
+                    sum_fixed += (*dec_comp) as u64;
+                }
+                sum = sum+(sum_fixed as f64)/dec_scl;
+                println!("sum the {}th byte of fixed number, which is {}",bytec,sum_fixed);
+                sum_fixed=0;
+                println!("now sum :{}", sum);
+                if remain == 0 {
+                    return sum
+                }
+            }
+            if (remain>0){
+                // let mut j =0;
+                if processed>=8{
+                    bitpack.finish_read_byte();
+                }
+                processed += remain as i32;
+                dec_scl = 2.0f64.powi(processed  - ilen as i32);
+                for i in 0..len {
+                    sum_fixed += (bitpack.read_bits( remain as usize).unwrap() as u64);
+                }
+                println!("sum remaining {} bits of fixed number, which is {}",remain,sum_fixed);
+                sum = sum+(sum_fixed as f64)/dec_scl;
+            }
+        }
+
         sum+= sum_base as f64;
         println!("sum is: {:?}",sum);
         sum
