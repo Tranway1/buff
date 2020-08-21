@@ -1,3 +1,20 @@
+bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 1.12878 5 >> new.out
+bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 4.36088 5 >> new.out
+bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 13.2222 5 >> new.out
+mv performance.csv UCI-all-performance.csv
+rm new.out
+
+bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 9.528 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 41.198 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 1669.83 5 >> new.out
+mv performance.csv stocks-open-performance.csv
+rm new.out
+
+bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 0.4 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 80.6 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 99.4 5 >> new.out
+mv performance.csv city_temperature_c8-performance.csv
+rm new.out
 
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 1.1509 5 >> new.out
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k 10000 4.1582 5 >> new.out
@@ -41,14 +58,6 @@ bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 75
 mv performance.csv pmu_p1_L1MAG-performance.csv
 rm new.out
 
-bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 0.4 5 >> new.out
-bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 80.6 5 >> new.out
-bash script/float_compress.sh /home/cc/float_comp/signal/city_temperature_c8.csv 10 99.4 5 >> new.out
-mv performance.csv city_temperature_c8-performance.csv
-rm new.out
-
-
-
 bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 2.891158 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 20.774518 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 80.980372 5 >> new.out
@@ -60,20 +69,6 @@ bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-al
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 8.8574 5 >> new.out
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 13.909 5 >> new.out
 mv performance.csv UCR-all-performance.csv
-rm new.out
-
-
-
-bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 1.12878 5 >> new.out
-bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 4.36088 5 >> new.out
-bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-all.csv 100000 13.2222 5 >> new.out
-mv performance.csv UCI-all-performance.csv
-rm new.out
-
-bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 9.528 5 >> new.out
-bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 41.198 5 >> new.out
-bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000 1669.83 5 >> new.out
-mv performance.csv stocks-open-performance.csv
 rm new.out
 
 bash script/float_compress.sh /home/cc/float_comp/signal/gas-array-all-c2-Humidity.txt 10000 29.6800 5 >> new.out

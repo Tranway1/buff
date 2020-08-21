@@ -333,12 +333,12 @@ pub fn run_splitdouble_byte_residue_encoding_decoding(test_file:&str, scl:usize,
     println!("Time elapsed in splitbd byte decompress function() is: {:?}", duration2);
 
     let start3 = Instant::now();
-    // comp.byte_residue_range_filter(comp_cp,pred);
+    comp.byte_residue_range_filter(comp_cp,pred);
     let duration3 = start3.elapsed();
     println!("Time elapsed in splitbd byte range filter function() is: {:?}", duration3);
 
     let start4 = Instant::now();
-    // comp.byte_residue_equal_filter(comp_eq,pred);
+    comp.byte_residue_equal_filter(comp_eq,pred);
     let duration4 = start4.elapsed();
     println!("Time elapsed in splitbd byte equal filter function() is: {:?}", duration4);
 
@@ -348,7 +348,7 @@ pub fn run_splitdouble_byte_residue_encoding_decoding(test_file:&str, scl:usize,
     println!("Time elapsed in byte_splitbd sum function() is: {:?}", duration5);
 
     let start6 = Instant::now();
-    // comp.byte_residue_max(comp_max);
+    comp.byte_residue_max(comp_max);
     let duration6 = start6.elapsed();
     println!("Time elapsed in byte_splitbd max function() is: {:?}", duration6);
 
