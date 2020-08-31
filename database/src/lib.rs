@@ -776,8 +776,11 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 		}
 
 
-	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
-	kernel.rbfdict_pre_process();
+	if testdict != None{
+		let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
+		kernel.rbfdict_pre_process();
+	}
+
 
 	//let mut comps:Vec<CompressionDemon<_,DB,_>> = Vec::new();
 	let batch = 20;
@@ -891,6 +894,9 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 		spawn_handles.push(oneshot::spawn(sig, &executor))
 	}
 
+	for comp in comp_handlers {
+		comp.join().unwrap();
+	}
 
 //	let handle1 = thread::spawn(move || {
 //		println!("Run compression demon 1" );

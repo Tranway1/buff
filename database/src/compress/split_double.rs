@@ -322,6 +322,115 @@ impl SplitBDDoubleCompress {
     }
 
     // encoder for V3
+    pub fn single_pass_byte_fixed_encode<'a,T>(&self, seg: &mut Segment<T>, mi:i64, ma:i64) -> Vec<u8>
+        where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
+
+        let mut t:u32 = seg.get_data().len() as u32;
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+        println!("precision {}, precision delta:{}", prec, prec_delta);
+
+        let mut bound = PrecisionBound::new(prec_delta);
+        // let start1 = Instant::now();
+        let dec_len = *(PRECISION_MAP.get(&prec).unwrap()) as u64;
+        let mut min = mi;
+        let mut max = ma;
+
+        let delta = max-min;
+        let base_fixed = min as i32;
+        println!("base integer: {}, max:{}",base_fixed,max);
+        let ubase_fixed = unsafe { mem::transmute::<i32, u32>(base_fixed) };
+        let base_fixed64:i64 = base_fixed as i64;
+        let mut single_val = false;
+        let mut cal_int_length = 0.0;
+        if delta == 0 {
+            single_val = true;
+        }else {
+            cal_int_length = (delta as f64).log2().ceil();
+        }
+
+        let fixed_len = cal_int_length as usize;
+        bound.set_length((cal_int_length as u64-dec_len), dec_len);
+        let ilen = fixed_len -dec_len as usize;
+        let dlen = dec_len as usize;
+        println!("int_len:{},dec_len:{}",ilen as u64,dec_len);
+        let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
+        bitpack_vec.write(ubase_fixed,32);
+        bitpack_vec.write(t, 32);
+        bitpack_vec.write(ilen as u32, 32);
+        bitpack_vec.write(dlen as u32, 32);
+
+        // let duration1 = start1.elapsed();
+        // println!("Time elapsed in dividing double function() is: {:?}", duration1);
+
+        // let start1 = Instant::now();
+        let mut remain = fixed_len;
+        let mut bytec = 0;
+
+        if remain<8{
+            for bd in seg.get_data(){
+                let fixed = bound.fetch_fixed_aligned((*bd).into());
+                bitpack_vec.write_bits((fixed-base_fixed64) as u32, remain).unwrap();
+            }
+            remain = 0;
+        }
+        else {
+            bytec+=1;
+            remain -= 8;
+            let mut fixed_u64 = Vec::new();
+            let mut cur_u64 = 0u64;
+            for bd in seg.get_data(){
+                let fixed = bound.fetch_fixed_aligned((*bd).into());
+                cur_u64 = (fixed-base_fixed64) as u64;
+                bitpack_vec.write_byte((cur_u64>>remain) as u8);
+                fixed_u64.push(cur_u64);
+            }
+            println!("write the {}th byte of dec",bytec);
+
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                if remain>0{
+                    for d in &fixed_u64 {
+                        bitpack_vec.write_byte((*d >>remain) as u8).unwrap();
+                    }
+                }
+                else {
+                    for d in &fixed_u64 {
+                        bitpack_vec.write_byte(*d as u8).unwrap();
+                    }
+                }
+
+
+                println!("write the {}th byte of dec",bytec);
+            }
+            if (remain>0){
+                bitpack_vec.finish_write_byte();
+                for d in fixed_u64 {
+                    bitpack_vec.write_bits(d as u32, remain as usize).unwrap();
+                }
+                println!("write remaining {} bits of dec",remain);
+            }
+        }
+
+
+        // println!("total number of dec is: {}", j);
+        let vec = bitpack_vec.into_vec();
+
+        // let duration1 = start1.elapsed();
+        // println!("Time elapsed in writing double function() is: {:?}", duration1);
+
+        let origin = t * mem::size_of::<T>() as u32;
+        info!("original size:{}", origin);
+        info!("compressed size:{}", vec.len());
+        let ratio = vec.len() as f64 /origin as f64;
+        print!("{}",ratio);
+        vec
+        //let bytes = compress(seg.convert_to_bytes().unwrap().as_slice());
+        //println!("{}", decode_reader(bytes).unwrap());
+    }
+
+    // encoder for V3
     pub fn byte_fixed_encode<'a,T>(&self, seg: &mut Segment<T>) -> Vec<u8>
         where T: Serialize + Clone+ Copy+Into<f64> + Deserialize<'a>{
 

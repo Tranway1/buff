@@ -115,7 +115,7 @@ impl<T,U,F> CompressionDemon<T,U,F>
 			match self.get_seg_from_uncomp_buf() {
 				Ok(mut segs) => {
 					self.processed = self.processed + segs.len();
-					println!("segment processed {}", self.processed);
+					println!("segment compressed {}", self.processed);
 					match &self.file_manager {
 						Some(fm) => {
 							for mut seg in segs{

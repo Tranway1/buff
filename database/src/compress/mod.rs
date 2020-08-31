@@ -23,6 +23,19 @@ use parity_snappy::compress;
 use crate::compress::split_double::SplitBDDoubleCompress;
 use crate::compress::sprintz::SprintzDoubleCompress;
 use crate::compress::gorilla::{GorillaBDCompress, GorillaCompress};
+use std::collections::HashMap;
+
+lazy_static! {
+    static ref FILE_MIN_MAX: HashMap<&'static str, (i64,i64)> =[("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", (-166032i64,415662i64)),
+        ("/home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv", (67193104i64,134089487i64)),
+        ("/home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv", (9544233i64,9721774i64)),
+        ("/home/cc/float_comp/signal/pmu_p1_L1MAG", (2144819199i64,15814987775i64)),
+        ("/home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv", (0i64,209715200i64)),
+        ("/home/cc/float_comp/signal/Stocks-c1-open.csv", (0i64,245760000i64)),
+        ("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv", (-4317773i64,15728640i64)),
+        ("/home/cc/float_comp/signal/city_temperature_c8.csv", (-3168i64,3520i64))]
+        .iter().cloned().collect();
+}
 
 pub fn run_bpsplit_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
@@ -260,7 +273,15 @@ pub fn run_splitdouble_byte_encoding_decoding(test_file:&str, scl:usize,pred: f6
     let org_size = seg.get_byte_size().unwrap();
     let comp = SplitBDDoubleCompress::new(10,10,scl);
     let start1 = Instant::now();
-    let compressed = comp.byte_fixed_encode(&mut seg);
+    let mut compressed;
+    if FILE_MIN_MAX.contains_key(test_file){
+        let (min,max ) = *(FILE_MIN_MAX.get(test_file).unwrap());
+        compressed = comp.single_pass_byte_fixed_encode(&mut seg,min,max);
+    }
+    else {
+        println!("no min/max");
+        compressed = comp.byte_fixed_encode(&mut seg);
+    }
     let duration1 = start1.elapsed();
     let comp_cp = compressed.clone();
     let comp_eq = compressed.clone();
@@ -325,32 +346,32 @@ pub fn run_splitdouble_byte_residue_encoding_decoding(test_file:&str, scl:usize,
     let comp_sum = compressed.clone();
     let comp_max = compressed.clone();
     let comp_size = compressed.len();
-    println!("Time elapsed in splitbd byte compress function() is: {:?}", duration1);
+    println!("Time elapsed in RAPG byte compress function() is: {:?}", duration1);
 
     let start2 = Instant::now();
     comp.byte_residue_decode(compressed);
     let duration2 = start2.elapsed();
-    println!("Time elapsed in splitbd byte decompress function() is: {:?}", duration2);
+    println!("Time elapsed in RAPG byte decompress function() is: {:?}", duration2);
 
     let start3 = Instant::now();
     comp.byte_residue_range_filter(comp_cp,pred);
     let duration3 = start3.elapsed();
-    println!("Time elapsed in splitbd byte range filter function() is: {:?}", duration3);
+    println!("Time elapsed in RAPG byte range filter function() is: {:?}", duration3);
 
     let start4 = Instant::now();
     comp.byte_residue_equal_filter(comp_eq,pred);
     let duration4 = start4.elapsed();
-    println!("Time elapsed in splitbd byte equal filter function() is: {:?}", duration4);
+    println!("Time elapsed in RAPG byte equal filter function() is: {:?}", duration4);
 
     let start5 = Instant::now();
     comp.byte_residue_sum(comp_sum);
     let duration5 = start5.elapsed();
-    println!("Time elapsed in byte_splitbd sum function() is: {:?}", duration5);
+    println!("Time elapsed in RAPG sum function() is: {:?}", duration5);
 
     let start6 = Instant::now();
     comp.byte_residue_max(comp_max);
     let duration6 = start6.elapsed();
-    println!("Time elapsed in byte_splitbd max function() is: {:?}", duration6);
+    println!("Time elapsed in RAPG max function() is: {:?}", duration6);
 
 
     println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
@@ -817,4 +838,11 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
     )
 }
 
+
+
+#[test]
+fn test_given_min_max() {
+    let (min,max ) = *(FILE_MIN_MAX.get(&"/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k").unwrap());
+    println!("min:{}, max{}", min,max);
+}
 

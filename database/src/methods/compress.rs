@@ -318,7 +318,7 @@ impl GZipCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        // print!("{}",ratio);
         bytes
     }
 
@@ -606,7 +606,7 @@ impl SnappyCompress {
         info!("compressed size:{}", bytes.len());
         //println!("{}", decode_reader(bytes).unwrap());
         let ratio = bytes.len() as f64 /origin_bin.len() as f64;
-        print!("{}",ratio);
+        // print!("{}",ratio);
         bytes
     }
 
