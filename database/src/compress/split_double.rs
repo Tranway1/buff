@@ -591,10 +591,10 @@ impl SplitBDDoubleCompress {
             fixed_vec.push(fixed);
         }
         let delta = max-min;
-        let base_fixed = min as i32;
+        let base_fixed = min;
         println!("base integer: {}, max:{}",base_fixed,max);
-        let ubase_fixed = unsafe { mem::transmute::<i32, u32>(base_fixed) };
-        let base_fixed64:i64 = base_fixed as i64;
+        let ubase_fixed = unsafe { mem::transmute::<i64, u64>(base_fixed) };
+        let base_fixed64:i64 = base_fixed;
         let mut single_val = false;
         let mut cal_int_length = 0.0;
         if delta == 0 {
@@ -610,7 +610,8 @@ impl SplitBDDoubleCompress {
         let dlen = dec_len as usize;
         println!("int_len:{},dec_len:{}",ilen as u64,dec_len);
         let mut bitpack_vec = BitPack::<Vec<u8>>::with_capacity(8);
-        bitpack_vec.write(ubase_fixed,32);
+        bitpack_vec.write(ubase_fixed as u32,32);
+        bitpack_vec.write((ubase_fixed>>32) as u32,32);
         bitpack_vec.write(t, 32);
         bitpack_vec.write(ilen as u32, 32);
         bitpack_vec.write(dlen as u32, 32);
@@ -1198,8 +1199,10 @@ impl SplitBDDoubleCompress {
 
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
         println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
@@ -1277,7 +1280,7 @@ impl SplitBDDoubleCompress {
                         // }
 
                         for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
-                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i64 ) as f64 / dec_scl);
                         }
                     }
                     else{
@@ -1296,7 +1299,7 @@ impl SplitBDDoubleCompress {
                     println!("read remaining {} bits of dec",remain);
                     println!("length for fixed:{}", fixed_vec.len());
                     for cur_fixed in fixed_vec.into_iter(){
-                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i64) as f64 / dec_scl);
                     }
                 }
 
@@ -1305,7 +1308,7 @@ impl SplitBDDoubleCompress {
                 if remain<8{
                     for i in 0..len {
                         cur = bitpack.read_bits(remain as usize).unwrap();
-                        expected_datapoints.push((base_int + cur as i32) as f64 / dec_scl);
+                        expected_datapoints.push((base_int + cur as i64) as f64 / dec_scl);
                     }
                     remain=0
                 }
@@ -1315,7 +1318,7 @@ impl SplitBDDoubleCompress {
                     chunk = bitpack.read_n_byte(len as usize).unwrap();
                     if remain == 0 {
                         for &x in chunk {
-                            expected_datapoints.push((base_int + x as i32) as f64 / dec_scl);
+                            expected_datapoints.push((base_int + x as i64) as f64 / dec_scl);
                         }
                     }
                     else{
@@ -1344,7 +1347,7 @@ impl SplitBDDoubleCompress {
                             // }
 
                             for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
-                                expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                                expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i64 ) as f64 / dec_scl);
                             }
                         }
                         else{
@@ -1365,7 +1368,7 @@ impl SplitBDDoubleCompress {
                         println!("read remaining {} bits of dec",remain);
                         println!("length for fixed:{}", fixed_vec.len());
                         for cur_fixed in fixed_vec.into_iter(){
-                            expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                            expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i64) as f64 / dec_scl);
                         }
                     }
                 }
@@ -1375,7 +1378,7 @@ impl SplitBDDoubleCompress {
             if remain<8{
                 for i in 0..len {
                     cur = bitpack.read_bits(remain as usize).unwrap();
-                    expected_datapoints.push((base_int + cur as i32) as f64 / dec_scl);
+                    expected_datapoints.push((base_int + cur as i64) as f64 / dec_scl);
                 }
                 remain=0
             }
@@ -1385,7 +1388,7 @@ impl SplitBDDoubleCompress {
                 chunk = bitpack.read_n_byte(len as usize).unwrap();
                 if remain == 0 {
                     for &x in chunk {
-                        expected_datapoints.push((base_int + x as i32) as f64 / dec_scl);
+                        expected_datapoints.push((base_int + x as i64) as f64 / dec_scl);
                     }
                 }
                 else{
@@ -1414,7 +1417,7 @@ impl SplitBDDoubleCompress {
                         // }
 
                         for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
-                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i32 ) as f64 / dec_scl);
+                            expected_datapoints.push( (base_int + ((*cur_fixed)|((*cur_chunk) as u64)) as i64 ) as f64 / dec_scl);
                         }
                     }
                     else{
@@ -1435,7 +1438,7 @@ impl SplitBDDoubleCompress {
                     println!("read remaining {} bits of dec",remain);
                     println!("length for fixed:{}", fixed_vec.len());
                     for cur_fixed in fixed_vec.into_iter(){
-                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i32) as f64 / dec_scl);
+                        expected_datapoints.push( (base_int + ((cur_fixed)|(bitpack.read_bits( remain as usize).unwrap() as u64)) as i64) as f64 / dec_scl);
                     }
                 }
             }
@@ -1738,8 +1741,10 @@ impl SplitBDDoubleCompress {
 
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
         println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
@@ -3152,8 +3157,10 @@ impl SplitBDDoubleCompress {
 
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
         println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
@@ -3857,8 +3864,10 @@ impl SplitBDDoubleCompress {
 
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
         println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         println!("total vector size:{}",len);
@@ -4575,8 +4584,10 @@ impl SplitBDDoubleCompress {
 
         let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
         let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
         // println!("base integer: {}",base_int);
         let len = bitpack.read(32).unwrap();
         // println!("total vector size:{}",len);
@@ -5127,7 +5138,7 @@ impl SplitBDDoubleCompress {
             }
         }
 
-        let max_f = (max as i32+base_int) as f64 / 2.0f64.powi(dlen as i32);
+        let max_f = (max as i64+base_int) as f64 / 2.0f64.powi(dlen as i32);
         println!("Number of qualified max items:{}", res.cardinality());
         println!("Max value:{}", max_f);
     }
