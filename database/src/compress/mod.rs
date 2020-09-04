@@ -871,9 +871,9 @@ fn test_given_min_max() {
 
 #[test]
 fn test_common_leading_bits() {
-    let test_file:&str = &"/home/cc/float_comp/signal/pmu_p1_L1MAG";
+    let test_file:&str = &"/home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv";
     let scl:usize= 1000000;
-    let SAMPLE = 10000;
+    let SAMPLE = 100000;
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
     let file_vec: Vec<f64> = file_iter.unwrap()
         .map(|x| (x*SCALE))
@@ -990,12 +990,12 @@ fn test_common_leading_bits() {
         for i in 0..32 {
             println!("{} same prefix frequency: {}", i, bits_counter[i]);
         }
-        for i in 1..32{
+        for i in 0..32{
             println!("{}: {}",i, bits_counter[i]);
             sum += bits_counter[i];
             // println!("sum: {}",sum);
             if sum<ol_conter{
-                bits_prefix += 1;
+                bits_prefix = i as u32;
             }
             else {
                 break;

@@ -36,7 +36,7 @@ lazy_static! {
         .iter().cloned().collect();
 }
 pub const SAMPLE:usize = 2000usize;
-pub const OUTLIER_R:f32 = 0.1f32;
+pub const OUTLIER_R:f32 = 0.2f32;
 
 #[derive(Clone)]
 pub struct SplitBDDoubleCompress {
@@ -617,7 +617,7 @@ impl SplitBDDoubleCompress {
         bitpack_vec.write(dlen as u32, 32);
 
         // if more than two bytes for integer section, use category byte compression
-        if (ilen>15){
+        if (ilen>4){
             // let duration1 = start1.elapsed();
             // println!("Time elapsed in dividing double function() is: {:?}", duration1);
 
@@ -638,98 +638,62 @@ impl SplitBDDoubleCompress {
                 }
             }
             let mut sum  = 0;
-            let zero_bytes = ilen/BYTE_BITS;
-            let adjusted = zero_bytes*BYTE_BITS;
             let ol_conter = (SAMPLE as f32 * OUTLIER_R) as u32;
-            let mut cols_outlier:u32 = 0;
+            let mut bits_outlier:usize = 0;
             println!("outlier ratio: {}",ol_conter);
-            for i in 0..adjusted{
+            for i in 0..ilen{
                 // println!("{}: {}",i, bits_counter[i]);
                 sum += bits_counter[i];
-                if i%BYTE_BITS == (BYTE_BITS-1) {
-                    // println!("sum: {}",sum);
-                    if sum<ol_conter{
-                        cols_outlier += 1;
-                    }
-                    else {
-                        break;
-                    }
+                // println!("{}th column sum: {}",i,sum);
+                if sum<ol_conter{
+                    bits_outlier += 1;
+                }
+                else {
+                    break;
                 }
             }
-
-            let mut outlier = Vec::new();
-            if cols_outlier>0{
+            bits_outlier = 12;
+            if bits_outlier>1{
                 // write number of outlier cols
-                println!("sub column for outlier: {}",cols_outlier);
-                bitpack_vec.write(cols_outlier, 8);
+                println!("bits length for outlier: {}",bits_outlier);
+                bitpack_vec.write(bits_outlier as u32, 8);
                 let mut cur_u64 = 0u64;
-                let mut cur_u8 = 0u8;
+                let mut cur_u32 = 0u32;
                 let mut fixed_u64 = Vec::new();
+                let mut outlier_bits = BitPack::<Vec<u8>>::with_capacity(8);
                 // write the first outlier column
-                remain -= 8;
-                bytec += 1;
+                remain -= bits_outlier;
                 let mut ind = 0;
                 let mut bm_outlier = Bitmap::create();
                 fixed_u64 = fixed_vec.iter().map(|x|{
                     cur_u64 = (*x-base_fixed64) as u64;
-                    cur_u8 = (cur_u64>>remain) as u8;
-                    if cur_u8 != 0{
-                        outlier.push(cur_u8);
+                    cur_u32 = (cur_u64>>remain) as u32;
+                    if cur_u32 != 0{
+                        outlier_bits.write(cur_u32, bits_outlier);
                         bm_outlier.add(ind);
                     }
                     ind += 1;
                     cur_u64
                 }).collect_vec();
 
+                let mut outlier_bitvector = outlier_bits.into_vec();
+
                 let mut n_outlier = bm_outlier.cardinality() as u32;
                 bm_outlier.run_optimize();
                 let mut bm_vec = bm_outlier.serialize();
                 let mut bm_size = bm_vec.len() as u32;
                 println!("bitmap size in {} byte: {}", bytec, bm_size);
-                println!("number of outliers in {} byte: {}", bytec, n_outlier);
+                println!("number of outliers in outlier: {}", n_outlier);
                 // write the serialized bitmap size before the serialized bitmap.
                 bitpack_vec.write(bm_size,32);
                 bitpack_vec.write_bytes(&mut bm_vec);
                 bitpack_vec.finish_write_byte();
 
                 // write the number of outlier before the actual outlier values
-                bitpack_vec.write(n_outlier,32);
-                bitpack_vec.write_bytes(&mut outlier);
+                bitpack_vec.write(outlier_bitvector.len() as u32,32);
+                bitpack_vec.write_bytes(&mut outlier_bitvector);
                 bitpack_vec.finish_write_byte();
-                cols_outlier -= 1;
 
-                for round in 0..cols_outlier{
-                    bm_outlier.clear();
-                    outlier.clear();
-                    ind = 0;
-                    remain -= 8;
-                    bytec += 1;
-                    for d in &fixed_u64 {
-                        cur_u8 = (*d >>remain) as u8;
-                        if cur_u8 != 0{
-                            outlier.push(cur_u8);
-                            bm_outlier.add(ind);
-                        }
-                        ind += 1;
-                    }
-
-                    n_outlier = bm_outlier.cardinality() as u32;
-                    bm_outlier.run_optimize();
-                    bm_vec = bm_outlier.serialize();
-                    bm_size = bm_vec.len() as u32;
-                    println!("bitmap size in {} byte: {}", bytec, bm_size);
-                    println!("number of outliers in {} byte: {}", bytec, n_outlier);
-                    // write the serialized bitmap size before the serialized bitmap.
-                    bitpack_vec.write(bm_size,32);
-                    bitpack_vec.write_bytes(&mut bm_vec);
-                    bitpack_vec.finish_write_byte();
-
-                    // write the number of outlier before the actual outlier values
-                    bitpack_vec.write(n_outlier,32);
-                    bitpack_vec.write_bytes(&mut outlier);
-                    bitpack_vec.finish_write_byte();
-
-                }
                 while (remain>=8){
                     bytec+=1;
                     remain -= 8;
