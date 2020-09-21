@@ -2059,6 +2059,25 @@ fn run_gorillabd_encoding_decoding() {
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
 
+fn to_byte_slice<'a>(floats: &'a [f32]) -> &'a [u8] {
+    unsafe {
+        std::slice::from_raw_parts(floats.as_ptr() as *const _, floats.len() * 4)
+    }
+}
+
+#[test]
+fn run_encoding_decoding_size() {
+    let file_vec: Vec<f32> = vec![0.66f32, 1.41, 1.41, 1.5, 2.72, 3.14];
+    let mut e = GzEncoder::new(Vec::new(), Compression::fast());
+    let vec_u8 =to_byte_slice(&file_vec[..]);
+    println!("original vector size {}:{:?}", vec_u8.len(), vec_u8);
+    e.write_all(vec_u8).unwrap();
+    //println!("orignal file size:{}", seg.get_byte_size().unwrap());
+    let bytes = e.finish().unwrap();
+    println!("compressed size:{}", bytes.len());
+}
+
+
 #[test]
 fn run_gorilla_encoding_decoding() {
     let args: Vec<String> = env::args().collect();

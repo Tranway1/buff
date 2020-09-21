@@ -52,10 +52,12 @@ lazy_static! {
     static ref FILE_MIN_MAX: HashMap<&'static str, (i64,i64)> =[("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", (-166032i64,415662i64)),
         ("/home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv", (67193104i64,134089487i64)),
         ("/home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv", (9544233i64,9721774i64)),
+        ("/home/cc/float_comp/signal/time_series_120rpm-c2-current.csv", (-78188537i64,80072697i64)),
         ("/home/cc/float_comp/signal/pmu_p1_L1MAG", (15029721087i64,15814987775i64)),
         ("/home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv", (0i64,209715200i64)),
         ("/home/cc/float_comp/signal/Stocks-c1-open.csv", (0i64,245760000i64)),
         ("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv", (-4317773i64,15728640i64)),
+        ("/home/cc/float_comp/signal/gas-array-all-c2-Humidity.txt", (4183i64, 21455i64)),
         ("/home/cc/float_comp/signal/city_temperature_c8.csv", (-3168i64,3520i64))]
         .iter().cloned().collect();
 }
