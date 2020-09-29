@@ -82,4 +82,10 @@ bash script/float_compress.sh /home/cc/float_comp/signal/gas-array-all-c3-temper
 mv performance.csv gas-array-all-c3-temperature-performance.csv
 rm new.out
 
+bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7360.449707 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7445.229980 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7533.481445 5 >> new.out
+mv performance.csv pmu_p1_L1MAG-performance-freq.csv
+rm new.out
+
 echo "done"

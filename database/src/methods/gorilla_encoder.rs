@@ -136,29 +136,30 @@ impl<T> GorillaEncoder<T>
             let leading_zeroes = xor.leading_zeros();
             let trailing_zeroes = xor.trailing_zeros();
 
-            if (leading_zeroes + trailing_zeroes) >= (self.leading_zeroes + self.trailing_zeroes+16){
-
-
-                // if the number of leading and trailing zeroes in this xor are not less than the
-                // leading and trailing zeroes in the previous xor then we store a control bit and
-                // use 6 bits to store the number of leading zeroes and 6 bits to store the number
-                // of significant digits before storing the significant digits themselves
-
-                self.w.write_bit(Bit::One);
-                self.w.write_bits(leading_zeroes as u64, 6);
-
-                // if significant_digits is 64 we cannot encode it using 6 bits, however since
-                // significant_digits is guaranteed to be at least 1 we can subtract 1 to ensure
-                // significant_digits can always be expressed with 6 bits or less
-                let significant_digits = 64 - leading_zeroes - trailing_zeroes;
-                self.w.write_bits((significant_digits - 1) as u64, 6);
-                self.w.write_bits(xor.wrapping_shr(trailing_zeroes), significant_digits);
-
-                // finally we need to update the number of leading and trailing zeroes
-                self.leading_zeroes = leading_zeroes;
-                self.trailing_zeroes = trailing_zeroes;
-            }
-            else if leading_zeroes >= self.leading_zeroes && trailing_zeroes >= self.trailing_zeroes {
+            // if (leading_zeroes + trailing_zeroes) >= (self.leading_zeroes + self.trailing_zeroes+16){
+            //
+            //
+            //     // if the number of leading and trailing zeroes in this xor are not less than the
+            //     // leading and trailing zeroes in the previous xor then we store a control bit and
+            //     // use 6 bits to store the number of leading zeroes and 6 bits to store the number
+            //     // of significant digits before storing the significant digits themselves
+            //
+            //     self.w.write_bit(Bit::One);
+            //     self.w.write_bits(leading_zeroes as u64, 6);
+            //
+            //     // if significant_digits is 64 we cannot encode it using 6 bits, however since
+            //     // significant_digits is guaranteed to be at least 1 we can subtract 1 to ensure
+            //     // significant_digits can always be expressed with 6 bits or less
+            //     let significant_digits = 64 - leading_zeroes - trailing_zeroes;
+            //     self.w.write_bits((significant_digits - 1) as u64, 6);
+            //     self.w.write_bits(xor.wrapping_shr(trailing_zeroes), significant_digits);
+            //
+            //     // finally we need to update the number of leading and trailing zeroes
+            //     self.leading_zeroes = leading_zeroes;
+            //     self.trailing_zeroes = trailing_zeroes;
+            // }
+            // else
+            if leading_zeroes >= self.leading_zeroes && trailing_zeroes >= self.trailing_zeroes {
                 // if the number of leading and trailing zeroes in this xor are >= the leading and
                 // trailing zeroes in the previous xor then we only need to store a control bit and
                 // the significant digits of this xor
@@ -185,7 +186,7 @@ impl<T> GorillaEncoder<T>
                 // finally we need to update the number of leading and trailing zeroes
                 self.leading_zeroes = leading_zeroes;
                 self.trailing_zeroes = trailing_zeroes;
-                //todo: add logics to avoid 0 0 case.
+                //todo: add logics to avoid 0 leading and 0 trailing cases.
             }
 
         }
