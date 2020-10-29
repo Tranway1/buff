@@ -11,7 +11,6 @@ use tsz::StdEncoder;
 use rustfft::num_traits::real::Real;
 use log::info;
 use std::collections::HashMap;
-use packed_simd::{u8x8,u8x16,u8x32};
 use crate::client::construct_file_iterator_skip_newline;
 use itertools::Itertools;
 use nalgebra::max;
@@ -7549,104 +7548,104 @@ impl SplitBDDoubleCompress {
         println!("Max value:{}", max_f);
     }
 
-    pub(crate) fn simd_range_filter(&self, bytes: Vec<u8>,pred:f64) {
-        let prec = (self.scale as f32).log10() as i32;
-        let prec_delta = get_precision_bound(prec);
-        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
-        let mut bound = PrecisionBound::new(prec_delta);
-        let ubase_int = bitpack.read(32).unwrap();
-        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
-        println!("base integer: {}",base_int);
-        let len = bitpack.read(32).unwrap();
-        println!("total vector size:{}",len);
-        let ilen = bitpack.read(32).unwrap();
-        println!("bit packing length:{}",ilen);
-        let dlen = bitpack.read(32).unwrap();
-        bound.set_length(ilen as u64, dlen as u64);
-        // check integer part and update bitmap;
-        let mut rb1 = Bitmap::create();
-        let mut res = Bitmap::create();
-        let target = pred;
-        let (int_part, dec_part) = bound.fetch_components(target);
-        let int_target = (int_part-base_int as i64) as u32;
-        let dec_target = dec_part as u32;
-        println!("target value with integer part:{}, decimal part:{}",int_target,dec_target);
-
-        let mut int_vec:Vec<u8> = Vec::new();
-
-        let start = Instant::now();
-        for i in 0..len {
-            int_vec.push(bitpack.read(ilen as usize).unwrap() as u8);
-        }
-        let lane = 16;
-        assert!(int_vec.len() % lane == 0);
-        let mut pre_vec = u8x16::splat(int_target as u8);
-        for i in (0..int_vec.len()).step_by(lane) {
-            let cur_word = u8x16::from_slice_unaligned(&int_vec[i..]);
-            let m = cur_word.gt(pre_vec);
-            for j in 0..lane{
-                if m.extract(j){
-                    res.add((i + j) as u32);
-                }
-            }
-            let m = cur_word.eq(pre_vec);
-            for j in 0..lane{
-                if m.extract(j){
-                    rb1.add((i + j) as u32);
-                }
-            }
-        }
-
-
-        // rb1.run_optimize();
-        // res.run_optimize();
-
-        let duration = start.elapsed();
-        println!("Time elapsed in splitBD simd filtering int part is: {:?}", duration);
-        println!("Number of qualified int items:{}", res.cardinality());
-
-        let start = Instant::now();
-        let mut iterator = rb1.iter();
-        // check the decimal part
-        let mut it = iterator.next();
-        let mut dec_cur = 0;
-        let mut dec_pre:u32 = 0;
-        let mut dec = 0;
-        let mut delta = 0;
-        if it!=None{
-            dec_cur = it.unwrap();
-            if dec_cur!=0{
-                bitpack.skip(((dec_cur) * dlen) as usize);
-            }
-            dec = bitpack.read(dlen as usize).unwrap();
-            if dec>dec_target{
-                res.add(dec_cur);
-            }
-            // println!("index qualified {}, decimal:{}",dec_cur,dec);
-            it = iterator.next();
-            dec_pre = dec_cur;
-        }
-        while it!=None{
-            dec_cur = it.unwrap();
-            //println!("index qualified {}",dec_cur);
-            delta = dec_cur-dec_pre;
-            if delta != 1 {
-                bitpack.skip(((delta-1) * dlen) as usize);
-            }
-            dec = bitpack.read(dlen as usize).unwrap();
-            // if dec_cur<10{
-            //     println!("index qualified {}, decimal:{}",dec_cur,dec);
-            // }
-            if dec>dec_target{
-                res.add(dec_cur);
-            }
-            it = iterator.next();
-            dec_pre=dec_cur;
-        }
-        let duration = start.elapsed();
-        println!("Time elapsed in splitBD simd filtering fraction part is: {:?}", duration);
-        println!("Number of qualified items:{}", res.cardinality());
-    }
+    // pub(crate) fn simd_range_filter(&self, bytes: Vec<u8>,pred:f64) {
+    //     let prec = (self.scale as f32).log10() as i32;
+    //     let prec_delta = get_precision_bound(prec);
+    //     let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+    //     let mut bound = PrecisionBound::new(prec_delta);
+    //     let ubase_int = bitpack.read(32).unwrap();
+    //     let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+    //     println!("base integer: {}",base_int);
+    //     let len = bitpack.read(32).unwrap();
+    //     println!("total vector size:{}",len);
+    //     let ilen = bitpack.read(32).unwrap();
+    //     println!("bit packing length:{}",ilen);
+    //     let dlen = bitpack.read(32).unwrap();
+    //     bound.set_length(ilen as u64, dlen as u64);
+    //     // check integer part and update bitmap;
+    //     let mut rb1 = Bitmap::create();
+    //     let mut res = Bitmap::create();
+    //     let target = pred;
+    //     let (int_part, dec_part) = bound.fetch_components(target);
+    //     let int_target = (int_part-base_int as i64) as u32;
+    //     let dec_target = dec_part as u32;
+    //     println!("target value with integer part:{}, decimal part:{}",int_target,dec_target);
+    //
+    //     let mut int_vec:Vec<u8> = Vec::new();
+    //
+    //     let start = Instant::now();
+    //     for i in 0..len {
+    //         int_vec.push(bitpack.read(ilen as usize).unwrap() as u8);
+    //     }
+    //     let lane = 16;
+    //     assert!(int_vec.len() % lane == 0);
+    //     let mut pre_vec = u8x16::splat(int_target as u8);
+    //     for i in (0..int_vec.len()).step_by(lane) {
+    //         let cur_word = u8x16::from_slice_unaligned(&int_vec[i..]);
+    //         let m = cur_word.gt(pre_vec);
+    //         for j in 0..lane{
+    //             if m.extract(j){
+    //                 res.add((i + j) as u32);
+    //             }
+    //         }
+    //         let m = cur_word.eq(pre_vec);
+    //         for j in 0..lane{
+    //             if m.extract(j){
+    //                 rb1.add((i + j) as u32);
+    //             }
+    //         }
+    //     }
+    //
+    //
+    //     // rb1.run_optimize();
+    //     // res.run_optimize();
+    //
+    //     let duration = start.elapsed();
+    //     println!("Time elapsed in splitBD simd filtering int part is: {:?}", duration);
+    //     println!("Number of qualified int items:{}", res.cardinality());
+    //
+    //     let start = Instant::now();
+    //     let mut iterator = rb1.iter();
+    //     // check the decimal part
+    //     let mut it = iterator.next();
+    //     let mut dec_cur = 0;
+    //     let mut dec_pre:u32 = 0;
+    //     let mut dec = 0;
+    //     let mut delta = 0;
+    //     if it!=None{
+    //         dec_cur = it.unwrap();
+    //         if dec_cur!=0{
+    //             bitpack.skip(((dec_cur) * dlen) as usize);
+    //         }
+    //         dec = bitpack.read(dlen as usize).unwrap();
+    //         if dec>dec_target{
+    //             res.add(dec_cur);
+    //         }
+    //         // println!("index qualified {}, decimal:{}",dec_cur,dec);
+    //         it = iterator.next();
+    //         dec_pre = dec_cur;
+    //     }
+    //     while it!=None{
+    //         dec_cur = it.unwrap();
+    //         //println!("index qualified {}",dec_cur);
+    //         delta = dec_cur-dec_pre;
+    //         if delta != 1 {
+    //             bitpack.skip(((delta-1) * dlen) as usize);
+    //         }
+    //         dec = bitpack.read(dlen as usize).unwrap();
+    //         // if dec_cur<10{
+    //         //     println!("index qualified {}, decimal:{}",dec_cur,dec);
+    //         // }
+    //         if dec>dec_target{
+    //             res.add(dec_cur);
+    //         }
+    //         it = iterator.next();
+    //         dec_pre=dec_cur;
+    //     }
+    //     let duration = start.elapsed();
+    //     println!("Time elapsed in splitBD simd filtering fraction part is: {:?}", duration);
+    //     println!("Number of qualified items:{}", res.cardinality());
+    // }
 }
 
 impl<'a, T> CompressionMethod<T> for SplitBDDoubleCompress

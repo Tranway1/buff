@@ -65,6 +65,7 @@ impl<T,U,F,G> BufferedSignal<T,U,F,G>
 	{
 		let mut kernel:Option<Kernel<T>>= match dict {
 			// The division was valid
+			// todo: remove this part and move to multithread compression
 			Some(x) => {
 				let mut kernel_dict = Kernel::new(x.clone(), 1, 4, DEFAULT_BATCH_SIZE);
 				kernel_dict.dict_pre_process();
@@ -163,21 +164,22 @@ impl<T,U,F,G> Future for BufferedSignal<T,U,F,G>
 							None => None,
 						};
 						//todo: adjust logics here to fix kernel method.
+						// we should remove compression logic here.
 						if bsize<DEFAULT_BATCH_SIZE{
-							//batch_vec.extend(&data);
-							//bsize= bsize+1;
+							batch_vec.extend(&data);
+							bsize= bsize+1;
 						}
 						else {
 							bsize = 0;
 							let belesize = batch_vec.len();
-							println!("vec for matrix length: {}", belesize);
+							// println!("vec for matrix length: {}", belesize);
 							let mut x = Array2::from_shape_vec((DEFAULT_BATCH_SIZE,self.seg_size),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
-							println!("matrix shape: {} * {}", x.rows(), x.cols());
+							// println!("matrix shape: {} * {}", x.rows(), x.cols());
 							match &self.kernel{
 								Some(kn) => kn.run(x),
 								None => (),
 							};
-							println!("new vec for matrix length: {}", batch_vec.len());
+							// println!("new vec for matrix length: {}", batch_vec.len());
 						}
 
 						let mut seg = Segment::new(None,old_timestamp.unwrap(),self.signal_id,

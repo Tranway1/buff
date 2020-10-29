@@ -37,7 +37,7 @@ mod dictionary;
 mod file_handler;
 pub mod segment;
 pub mod methods;
-pub mod simd;
+// pub mod simd;
 mod future_signal;
 pub mod client;
 mod query;
@@ -385,13 +385,13 @@ pub fn run_test<T: 'static>(config_file: &str)
 //	let buf2 = buf_option.clone();
 //	let comp_buf2 = compre_buf_option.clone();
 
-	//let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
-	//kernel.rbfdict_pre_process();
+	let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
+	kernel.dict_pre_process();
 
 //    let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf_option.unwrap().clone(),*compre_buf_option.unwrap().clone(),None,0.1,0.1,|x|(paa_compress(x,50)));
-//	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
-	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,PAACompress::new(10,10));
-//	let mut compress_demon1:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf1.unwrap(),*comp_buf1.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
+// 	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,kernel);
+	// let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,PAACompress::new(10,10));
+	let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf.unwrap(),*comp_buf.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 //	let mut compress_demon2:CompressionDemon<_,DB,_> = CompressionDemon::new(*buf2.unwrap(),*comp_buf2.unwrap(),None,0.1,0.1,FourierCompress::new(10,1));
 
 	/* Construct the runtime */
@@ -456,7 +456,7 @@ pub fn run_test<T: 'static>(config_file: &str)
 		}
 	}
 
-	handle.join().unwrap();
+	// handle.join().unwrap();
 	//handle1.join().unwrap();
 	//handle2.join().unwrap();
 
@@ -776,40 +776,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 		}
 
 
-	if testdict != None{
-		let mut kernel = Kernel::new(testdict.clone().unwrap(),1,4,30);
-		kernel.rbfdict_pre_process();
-	}
-
-
-	//let mut comps:Vec<CompressionDemon<_,DB,_>> = Vec::new();
 	let batch = 20;
-
-//	for x in 0..num_comp {
-//		let mut compress_demon:CompressionDemon<_,DB,_> = ();
-//		match comp{
-//			"paa" => {
-//				let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*(buf_option.clone().unwrap()),*(compre_buf_option.clone().unwrap()),None,0.1,0.0,PAACompress::new(10,batch));
-//
-//			},
-//			"fourier" => {
-//				let mut compress_demon: CompressionDemon<_, DB, _> = CompressionDemon::new(*(buf_option.clone().unwrap()), *(compre_buf_option.clone().unwrap()), None, 0.1, 0.0, FourierCompress::new(10, batch));
-//			}
-//			"snappy" => {
-//
-//				let mut compress_demon: CompressionDemon<_, DB, _> = CompressionDemon::new(*(buf_option.clone().unwrap()), *(compre_buf_option.clone().unwrap()), None, 0.1, 0.0, SnappyCompress::new(10, batch));
-//
-//			}
-//			"gzip" => {
-//
-//				let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*(buf_option.clone().unwrap()),*(compre_buf_option.clone().unwrap()),None,0.1,0.0,GZipCompress::new(10,batch));
-//
-//			}
-//			_ => {panic!("Compression not supported yet.")}
-//		}
-//		comps.push(compress_demon);
-//	}
-
 
 
 
@@ -880,6 +847,21 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 				});
 				comp_handlers.push(handle);
 			}
+
+			"kernel" => {
+				let mut knl = Kernel::new(array![[T::one(), T::one()],[T::one(), T::one()]],1,4,30);;
+				if testdict != None{
+					knl = Kernel::new(testdict.clone().unwrap(),1,4,30);
+					knl.rbfdict_pre_process();
+				}
+				let mut compress_demon:CompressionDemon<_,DB,_> = CompressionDemon::new(*(buf_option.clone().unwrap()),*(compre_buf_option.clone().unwrap()),None,0.1,0.0,knl);
+				let handle = thread::spawn(move || {
+					println!("Run compression demon" );
+					compress_demon.run();
+					println!("segment commpressed: {}", compress_demon.get_processed() );
+				});
+				comp_handlers.push(handle);
+			}
 			_ => {panic!("Compression not supported yet.")}
 		}
 
@@ -895,20 +877,9 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 	}
 
 	for comp in comp_handlers {
-		comp.join().unwrap();
+		// comp.join().unwrap();
 	}
 
-//	let handle1 = thread::spawn(move || {
-//		println!("Run compression demon 1" );
-//		compress_demon1.run();
-//		println!("segment commpressed: {}", compress_demon1.get_processed() );
-//	});
-//
-//	let handle2 = thread::spawn(move || {
-//		println!("Run compression demon 2" );
-//		compress_demon2.run();
-//		println!("segment commpressed: {}", compress_demon2.get_processed() );
-//	});
 
 	// wait the future to finish.
 	for sh in spawn_handles {
@@ -917,10 +888,6 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 			_ => println!("Failed to produce a timestamp"),
 		}
 	}
-
-	//handle.join().unwrap();
-	//handle1.join().unwrap();
-	//handle2.join().unwrap();
 
 	// Wait until the runtime becomes idle and shut it down.
 	match rt.shutdown_on_idle().wait() {

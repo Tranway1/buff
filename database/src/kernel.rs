@@ -17,7 +17,7 @@ use std::time::Instant;
 use crate::segment::Segment;
 use crate::methods::compress::CompressionMethod;
 
-#[derive(Clone)]
+#[derive(Clone )]
 pub struct Kernel<T> {
     dictionary: Array2<T>,
     ffted_dictionary: Vec<Vec<Complex<T>>> ,
@@ -28,7 +28,7 @@ pub struct Kernel<T> {
     batchsize: usize
 }
 
-impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapack+ Serialize> Kernel<T> {
+impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float  +Scalar + Lapack+ Serialize> Kernel<T> {
     pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize, batchsize: usize) -> Self {
         Kernel {
             dictionary: dictionary,
@@ -41,6 +41,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         }
     }
 
+    // this is optimized version
     pub fn dict_pre_process(&mut self){
         self.ffted_dictionary = fft_preprocess(&self.dictionary,self.coeffs);
 
@@ -68,6 +69,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         println!("eigen vec shape:{}*{}", self.eigen_vec.rows(),self.eigen_vec.cols())
     }
 
+    // optimized version
     pub fn run(&self, x: Array2<T>){
         let mut x_fft = fft_preprocess(&x,self.coeffs);
 
@@ -89,7 +91,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         z_exact = z_exact.dot(&self.in_eigen_val);
 
         let duration = start.elapsed();
-        //println!("Time elapsed in kernel function() is: {:?}", duration);
+        println!("Time elapsed in run kernel function() is: {:?}", duration);
     }
 
 
@@ -118,7 +120,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         println!("eigen vec shape:{}*{}", self.eigen_vec.rows(),self.eigen_vec.cols())
     }
 
-
+    // original version
     pub fn rbfrun(&self, mut x: Array2<T>){
         let mut x_fft = fft_preprocess(&x,self.coeffs);
 
@@ -140,7 +142,7 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float + Scalar + Lapa
         z_exact = z_exact.dot(&self.in_eigen_val);
 
         let duration = start.elapsed();
-        println!("Time elapsed in kernel function() is: {:?}", duration);
+        println!("Time elapsed in rbfrun kernel function() is: {:?}", duration);
     }
 
 }
@@ -158,15 +160,15 @@ impl<T> CompressionMethod<T> for Kernel<T>
 
     fn run_compress<'a>(&self, segs: &mut Vec<Segment<T>>) {
         let mut batch_vec: Vec<T> = Vec::new();
-        println!("segments size: {}", segs.len());
+        // println!("segments size: {}", segs.len());
         for seg in segs {
             batch_vec.extend(seg.get_data().clone());
 
         }
         let belesize = batch_vec.len();
-        println!("vec for matrix length: {}", belesize);
+        // println!("vec for matrix length: {}", belesize);
         let mut x = Array2::from_shape_vec((self.batchsize,belesize/self.batchsize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
-        println!("matrix shape: {} * {}", x.rows(), x.cols());
+        // println!("matrix shape: {} * {}", x.rows(), x.cols());
         self.rbfrun(x);
     }
 
