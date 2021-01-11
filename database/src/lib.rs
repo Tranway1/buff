@@ -9,6 +9,12 @@ extern crate toml_loader;
 #[macro_use] extern crate ndarray;
 extern crate ndarray_linalg;
 
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 use rand::prelude::*;
 use rand::distributions::Uniform;
 use crate::client::{construct_normal_gen_client, read_dict};
@@ -43,6 +49,8 @@ pub mod client;
 mod query;
 pub mod compress;
 pub mod pscan;
+pub mod avl;
+pub mod outlier;
 pub mod knn;
 // pub mod plot;
 mod tree;
@@ -849,7 +857,7 @@ pub fn run_single_test<T: 'static>(config_file: &str, comp:&str, num_comp:i32)
 			}
 
 			"kernel" => {
-				let mut knl = Kernel::new(array![[T::one(), T::one()],[T::one(), T::one()]],1,4,30);;
+				let mut knl = Kernel::new(array![[T::one(), T::one()],[T::one(), T::one()]],1,4,30);
 				if testdict != None{
 					knl = Kernel::new(testdict.clone().unwrap(),1,4,30);
 					knl.rbfdict_pre_process();

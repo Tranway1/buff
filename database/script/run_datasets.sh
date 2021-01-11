@@ -17,7 +17,7 @@ mv performance.csv ts120rpm-c8-performance.csv
 rm new.out
 
 bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7360.449707 5 >> new.out
-bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7511.229980 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7445.229980 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 7533.481445 5 >> new.out
 mv performance.csv pmu_p1_L1MAG-performance.csv
 rm new.out
@@ -52,8 +52,8 @@ bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCI-al
 mv performance.csv UCI-all-performance.csv
 rm new.out
 
-bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 3.59375 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 172.625 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 3.59375 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c2-current.csv 100000 269.2344 5 >> new.out
 mv performance.csv ts120rpm-c2-performance.csv
 rm new.out

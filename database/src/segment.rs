@@ -28,6 +28,7 @@ use rand::{SeedableRng};
 use rand::rngs::{StdRng};
 use rand::distributions::{Normal, Distribution};
 use crate::methods::compress::CompressionMethod;
+use crate::knn::fft_ifft_ratio;
 
 
 /* 
@@ -540,7 +541,7 @@ pub fn error_rate<T>(actual: &[T], saved: &[T]) -> T
 	assert_eq!(actual.len(), saved.len());
 	let mut sse = T::zero();
 	for (&a, &b) in actual.iter().zip(saved.iter()) {
-		sse = sse +  (a - b) / a * FromPrimitive::from_f32(1.0).unwrap();
+		sse = sse + ( (a - b) / a * FromPrimitive::from_f32(1.0).unwrap() );
 	}
 	let size = FromPrimitive::from_usize(actual.len()).unwrap();
 	return sse / size;
@@ -548,7 +549,7 @@ pub fn error_rate<T>(actual: &[T], saved: &[T]) -> T
 
 /* Main Segment Test Functions */
 #[test]
-fn test_fourier_compression() {
+fn test_fourier_on_segment() {
 	let data: Vec<f32> = vec![-0.62195737,-0.62067724,-0.61668396,-0.61101182,-0.60376876,-0.59526654,-0.58647653,-0.57789937,-0.57014665,-0.56427365,
 						-0.55999256,-0.55476112,-0.5474581,-0.53943256,-0.53062456,-0.52216732,-0.51320042,-0.50285746,-0.49217873,-0.48166489,
 						-0.47088723,-0.45836476,-0.44452618,-0.42874193,-0.41364421,-0.40055812,-0.38835942,-0.37925162,-0.37483863,-0.37323772,
@@ -609,6 +610,24 @@ fn test_fourier_compression() {
 	assert!(compare_vectors(init_seg.data.as_slice(), decompressed_seg.data.as_slice()));
 	assert_eq!(compressed_seg.method, Some(Fourier));
 	assert_eq!(decompressed_seg.method, None)
+}
+
+
+#[test]
+fn test_fourier_compression() {
+	let data: Vec<f64> = vec![-0.55999256,-0.55476112,-0.5474581,-0.53943256,-0.53062456,-0.52216732,-0.51320042,-0.50285746,-0.49217873,-0.48166489];
+	let fres = fft_ifft_ratio(&data,0.4);
+	println!("decompressed {:?}",fres );
+	let mut sse = 0.0;
+	for (&a, &b) in data.as_slice().iter().zip(fres.as_slice().iter()) {
+		sse = sse + ( (a - b) / a );
+		// println!("{},{},cur err: {}",a, b, (a - b) / a);
+	}
+
+	println!("err rate: {}",sse);
+	// assert!(compare_vectors(data.as_slice(), decompressed_seg.data.as_slice()));
+	// assert_eq!(compressed_seg.method, Some(Fourier));
+	// assert_eq!(decompressed_seg.method, None)
 }
 
 #[test]

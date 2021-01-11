@@ -4,7 +4,7 @@ cd /home/cc/TimeSeriesDB/database;
 TIME=$4
 SCL=$2
 PRED=$3
-for comp in gorilla gorillabd splitdouble bytedec byteall sprintz bpsplit gzip snappy dict RAPG RAPG-major;
+for comp in gorilla gorillabd splitdouble bytedec byteall sprintz bpsplit gzip snappy dict RAPG RAPG-major fixed;
 #for comp in gorilla gorillabd;
 do
   for i in $(seq 1 $TIME);

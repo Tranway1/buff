@@ -412,6 +412,65 @@ pub fn run_splitdouble_byte_residue_majority_encoding_decoding(test_file:&str, s
     )
 }
 
+pub fn run_fixed_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
+    let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
+
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let org_size = seg.get_byte_size().unwrap();
+    let comp = SplitBDDoubleCompress::new(10,10,scl);
+    let start1 = Instant::now();
+    let compressed = comp.fixed_encode(&mut seg);
+    let duration1 = start1.elapsed();
+    let comp_cp = compressed.clone();
+    let comp_eq = compressed.clone();
+    let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
+    let comp_size = compressed.len();
+    println!("Time elapsed in fixed bp compress function() is: {:?}", duration1);
+
+    let start2 = Instant::now();
+    comp.fixed_decode(compressed);
+    let duration2 = start2.elapsed();
+    println!("Time elapsed in fixed bp decompress function() is: {:?}", duration2);
+
+    let start3 = Instant::now();
+    comp.fixed_range_filter(comp_cp,pred);
+    let duration3 = start3.elapsed();
+    println!("Time elapsed in fixed bp range filter function() is: {:?}", duration3);
+
+    let start4 = Instant::now();
+    comp.fixed_equal_filter(comp_eq,pred);
+    let duration4 = start4.elapsed();
+    println!("Time elapsed in fixed bp equal filter function() is: {:?}", duration4);
+
+    let start5 = Instant::now();
+    comp.fixed_sum(comp_sum);
+    let duration5 = start5.elapsed();
+    println!("Time elapsed in fixed bp sum function() is: {:?}", duration5);
+
+    let start6 = Instant::now();
+    comp.fixed_max(comp_max);
+    let duration6 = start6.elapsed();
+    println!("Time elapsed in fixed bp max function() is: {:?}", duration6);
+
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+             comp_size as f64/ org_size as f64,
+             1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
+
+
+    )
+}
+
+
 pub fn run_splitdouble_byte_residue_encoding_decoding(test_file:&str, scl:usize,pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
     let file_vec: Vec<f64> = file_iter.unwrap()

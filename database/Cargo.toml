@@ -1,7 +1,7 @@
 [package]
 name = "time_series_start"
 version = "0.1.0"
-authors = ["Drew Callahan <acallahan@cs.uchicago.edu>","Chunwei Liu <chunwei@uchicago.edu>"]
+authors = ["Chunwei Liu <chunwei@uchicago.edu>", "Drew Callahan <acallahan@cs.uchicago.edu>"]
 edition = "2018"
 
 [[bin]]
@@ -23,6 +23,14 @@ path = "src/pscan/main.rs"
 [[bin]]
 name = "knn"
 path = "src/knn/main.rs"
+
+[[bin]]
+name = "avl_tree"
+path = "src/avl/main.rs"
+
+[[bin]]
+name = "outlier_exp"
+path = "src/outlier/main.rs"
 
 
 [dependencies]
@@ -59,4 +67,8 @@ libc = "0.2"
 #packed_simd = "0.3.3"
 histogram = "0.6.9"
 itertools = "0.9.0"
+zipf = "7.0.0"
+permutation = "0.2.5"
+quickcheck = "0.9.2"
+quickcheck_macros = "0.9"
 #plotters = "0.2.15"

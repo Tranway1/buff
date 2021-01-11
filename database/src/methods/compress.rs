@@ -2032,7 +2032,7 @@ fn run_splitbd_encoding_decoding() {
     println!("Time elapsed in {:?} splitbd compress function() is: {:?}",comp.type_id(), duration);
     test_splitbd_compress_on_file::<f64>(TEST_FILE);
     let start = Instant::now();
-    comp.simd_range_filter(compressed,PRED);
+    // comp.simd_range_filter(compressed,PRED);
     let duration = start.elapsed();
     println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration);
 }
