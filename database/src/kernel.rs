@@ -41,6 +41,64 @@ impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float  +Scalar + Lapa
         }
     }
 
+
+    pub fn dict_pre_process_v0(&mut self){
+
+        let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
+        let mut w: Array2<T> = Array2::zeros((nrows_dic, nrows_dic));
+        let mut dist_comp:usize= 0;
+        for i in 0..nrows_dic {
+            for j in 0..nrows_dic {
+                w[[i,j]] = sinkcompressed(self.dictionary.row(i), self.dictionary.row(j), self.gamma, self.coeffs);
+                dist_comp = dist_comp+1;
+            }
+        }
+        let (val, vecs) = w.clone().eigh(UPLO::Upper).unwrap();
+        // println!("eigenvalues = \n{:?}", val);
+        //println!("V = \n{:?}", vecs);
+        let size_eig = val.len();
+        let mut one_2d = Array2::ones((size_eig,1));
+        let mut val_2d = Array2::from_shape_vec((size_eig,1), val.to_vec()).unwrap();
+        let mut inv_val_2d= one_2d/val_2d;
+        let sqrt_val = inv_val_2d.map(|x|Scalar::from_real(x.sqrt()));
+        // println!("sqrt_val = \n{:?}", sqrt_val);
+        let mut dia = Array2::eye(size_eig);
+        for idx in 0..size_eig{
+            dia[[idx,idx]] = sqrt_val[[idx,0]];
+        }
+        // println!("dia = \n{:?}", dia);
+        let mut va = dia;
+        // println!("va = \n{:?}", va);
+        self.in_eigen_val = va;
+        self.eigen_vec = vecs;
+        // println!("eigen vec shape:{}*{}", self.in_eigen_val.rows(),self.in_eigen_val.cols())
+    }
+
+    pub fn run_v0(&self, x: Array2<T>)-> Vec<T>{
+        let start = Instant::now();
+        let (nrows_x, ncols_x) = (x.rows(),x.cols());
+        let (nrows_dic, ncols_dic) = (self.dictionary.rows(),self.dictionary.cols());
+        let mut e: Array2<T> = Array2::zeros((nrows_x, nrows_dic));
+        let mut dist_comp:usize= 0;
+
+        for i in 0..nrows_x {
+            //println!("{}",i);
+            for j in 0..nrows_dic {
+                e[[i,j]] = sinkcompressed(x.row(i), self.dictionary.row(j), self.gamma, self.coeffs);
+                dist_comp = dist_comp + 1;
+            }
+        }
+
+        let mut z_exact = e.dot(&self.eigen_vec);
+        // println!("z_exact= \n{:?}", z_exact);
+        z_exact = z_exact.dot(&self.in_eigen_val);
+        // println!("z_exact= \n{:?}", z_exact);
+
+        let duration = start.elapsed();
+        // println!("Time elapsed in run kernel function() is: {:?}", duration);
+        z_exact.into_raw_vec()
+    }
+
     // this is optimized version
     pub fn dict_pre_process(&mut self){
         self.ffted_dictionary = fft_preprocess(&self.dictionary,self.coeffs);
@@ -210,8 +268,8 @@ pub fn opt_nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + 
     //ifft.process(&mut cpx,&mut cpxoutput);
     //println!("cpxput:{:?}",cpxoutput);
     //println!("ioutput:{:?}",ioutput);
-    let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re).collect();
-    //println!("reioutput:{:?}",reioutput);
+    let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re/FromPrimitive::from_f64((size as f64)).unwrap()).collect();
+    // println!("reioutput:{:?}",reioutput);
 
     //
     let to_del = size-2*len+1;
@@ -294,7 +352,7 @@ pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Floa
     let fftlen = ((2*len-1) as f64).log2().ceil(); // fft length calculation
     let mut size = (fftlen.exp2()) as usize;
     //let compression = len * comp /100;
-
+    // println!("size:{}",size);
     //println!("xrow:{:?}",xrow);
     let mut xinput: Vec<Complex<T>> = xrow.iter()
         .map(|x| Complex::new(*x,Zero::zero()))
@@ -316,13 +374,13 @@ pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Floa
         fft.process(&mut dic_input, &mut dic_output);
     }
     let mut cpx = xoutput.clone();
-    //println!("xoutput:{:?}",xoutput);
+    // println!("xoutput:{:?}",xoutput);
     leading_fft(&mut xoutput,comp);
     leading_fft(&mut dic_output,comp);
-    //println!("xoutput:{:?}",xoutput);
+    // println!("xoutput:{:?}",xoutput);
     let mut mul: Vec<Complex<T>> = xoutput.iter().zip(dic_output).map(|(x,y)| x.mul(y.conj())).collect();
 //        let d:Vec<T> = mul.iter().map(|x| x.re).collect();
-    //println!("mul:{:?}",mul);
+//     println!("mul:{:?}",mul);
 
     /* ifft*/
     let mut iplanner = FFTplanner::new(true);
@@ -334,9 +392,9 @@ pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Floa
     ifft.process(&mut mul, &mut ioutput);
     //ifft.process(&mut cpx,&mut cpxoutput);
     //println!("cpxput:{:?}",cpxoutput);
-    //println!("ioutput:{:?}",ioutput);
-    let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re).collect();
-    //println!("reioutput:{:?}",reioutput);
+    // println!("ioutput:{:?}",ioutput);
+    let mut reioutput:Vec<T> = ioutput.iter().map(|c| c.re/FromPrimitive::from_f64((size as f64)).unwrap()).collect();
+    // println!("reioutput:{:?}",reioutput);
 
     //
     let to_del = size-2*len+1;
@@ -347,8 +405,9 @@ pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Floa
     let mut cc_sequence  = Array1::from_vec(reioutput);
     //println!("cc_sequence:{:?}",cc_sequence);
 
-    let norm = l2_norm(xrow.view()) * l2_norm(dic_row.view()) * FromPrimitive::from_usize(size).unwrap();
-    //println!("norm:{:?}",norm);
+    let norm = l2_norm(xrow.view()) * l2_norm(dic_row.view());
+    // println!("norm:{:?}",norm);
+    // println!("normx:{:?},normy:{:?}",l2_norm(xrow.view()),l2_norm(dic_row.view()));
 
     let res=cc_sequence.mapv_into(|e|e/norm);
     //println!("normlized:{:?}",res);
@@ -368,7 +427,7 @@ pub fn nccc_compressed<'a,T: FFTnum + PartialOrd +std::fmt::Debug + Clone + Floa
 fn leading_fft<T:Neg+Num+Clone> (x: &mut Vec<Complex<T>>, k: usize) {
     let le = x.len();
     for (i, a) in x.iter_mut().enumerate(){
-        if i>=k && i<=le-k {
+        if i>=k && i<le-k {
             *a = Complex::zero();
         }
     }
@@ -483,6 +542,15 @@ fn test_kernel(){
 //    println!("||x||_2 = {}", l2_norm(x.view()));
 //    //println!("||x||_1 = {}", l1_norm(x.view()));
 //    println!("Normalizing x yields {:?}", normalize(x));
+}
+#[test]
+fn test_NCCc() {
+    let mut x = Array1::from_vec(vec![41.978,44.135,43.157,42.803]);
+    let mut y = Array1::from_vec(vec![2.944,42.538,41.731,42.069]);
+    let z = nccc_compressed(x.view(),y.view(),10);
+    println!("nccc:{:?}",z);
+    let s = sinkcompressed(x.view(),y.view(),1,10);
+    println!("sum_exp_nccc:{:?}",s);
 }
 
 

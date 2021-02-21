@@ -1,6 +1,7 @@
 pub mod split_double;
 pub mod sprintz;
 pub mod gorilla;
+pub mod btr_array;
 
 use std::{env, fs};
 use crate::client::construct_file_iterator_skip_newline;

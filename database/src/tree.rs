@@ -44,15 +44,15 @@ impl<T> Tree<T>
 
 #[test]
 fn test_stats_tree(){
-    let mytree = Tree::new( Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 1, 1, 14))
+    let mytree = Tree::new( Stats::new(0, 0, 3, 2, 1, 1, 14))
         .left(
-            Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 2, 1, 14))
-                .right(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 3, 1, 14)))
+            Tree::new(Stats::new(0, 0, 3, 2, 2, 1, 14))
+                .right(Tree::new(Stats::new(0, 0, 3, 2, 3, 1, 14)))
         )
         .right(
-            Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 4, 1, 14))
-                .left(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 5, 1, 14)))
-                .right(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 6, 1, 14)))
+            Tree::new(Stats::new(0, 0, 3, 2, 4, 1, 14))
+                .left(Tree::new(Stats::new(0, 0, 3, 2, 5, 1, 14)))
+                .right(Tree::new(Stats::new(0, 0, 3, 2, 6, 1, 14)))
         );
     println!("count of rount: {}", mytree.root.get_count());
     let left = mytree.get_left();
@@ -69,9 +69,9 @@ fn test_build_stats_tree(){
     let mut q: Queue<Tree<i32>> = queue![];
 
     // Add some elements to it
-    q.add(Tree::new( Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 1, 1, 14)));
-    q.add(Tree::new( Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 2, 1, 14)));
-    q.add(Tree::new( Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 3, 1, 14)));
+    q.add(Tree::new( Stats::new(0, 0, 3, 2, 1, 1, 14)));
+    q.add(Tree::new( Stats::new(0, 0, 3, 2, 2, 1, 14)));
+    q.add(Tree::new( Stats::new(0, 0, 3, 2, 3, 1, 14)));
 
     // Check the Queue's size
     q.size();  // 3
@@ -100,15 +100,15 @@ fn test_build_stats_tree(){
     // Attempt to remove an element from an empty Queue
     q.remove();  // Raises an error
 
-    let mytree = Tree::new( Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 1, 1, 14))
+    let mytree = Tree::new( Stats::new(0, 0, 3, 2, 1, 1, 14))
         .left(
-            Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 2, 1, 14))
-                .right(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 3, 1, 14)))
+            Tree::new(Stats::new(0, 0, 3, 2, 2, 1, 14))
+                .right(Tree::new(Stats::new(0, 0, 3, 2, 3, 1, 14)))
         )
         .right(
-            Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 4, 1, 14))
-                .left(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 5, 1, 14)))
-                .right(Tree::new(Stats::new(SystemTime::now(), SystemTime::now(), 3, 2, 6, 1, 14)))
+            Tree::new(Stats::new(0, 0, 3, 2, 4, 1, 14))
+                .left(Tree::new(Stats::new(0, 0, 3, 2, 5, 1, 14)))
+                .right(Tree::new(Stats::new(0, 0, 3, 2, 6, 1, 14)))
         );
     println!("count of rount: {}", mytree.root.get_count());
     let left = mytree.get_left();

@@ -8,6 +8,12 @@ use itertools::Itertools;
 use rustfft::FFTplanner;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
+use crate::client::read_dict;
+use crate::kernel::Kernel;
+use ndarray::Array2;
+use std::collections::HashMap;
+use core::mem;
+use crate::methods::compress::TEST_FILE;
 
 
 pub struct LabelPixel {
@@ -40,6 +46,69 @@ pub fn slurp_file(file: &Path, prec:i32) -> Vec<LabelPixel> {
                     }).collect()
                 }
                     }
+            }
+        })
+        .collect()
+}
+
+pub fn get_gamma(gammas: &Path) -> HashMap<String,isize>{
+    let mut mymap = HashMap::new();
+    // mymap.insert("foo".to_string(), "bar".to_string());
+    // println!("{}", mymap.find_equiv(&"foo"));
+    // println!("{}", mymap.find_equiv(&"not there"));
+    let lines = BufReader::new(File::open(gammas).unwrap()).lines().skip(0)
+        .map(|x| x.unwrap())
+        .collect::<Vec<String>>();
+
+    for line in lines{
+        // println!("{}",line);
+        let mut iter = line.trim().split(',');
+        let fname =  iter.next().unwrap().split('/').last().unwrap();
+        // println!("{}",fname);
+        let gamma_arr:Vec<isize> = iter.map(|x|isize::from_str(x).unwrap()).collect();
+        let gamma = gamma_arr.get(7).unwrap();
+        mymap.insert(fname.to_string(), *gamma);
+    }
+
+    // BufReader::new(File::open(gammas).unwrap())
+    //     .lines()
+    //     .skip(0)
+    //     .map(|line| {
+    //         let line = line.unwrap();
+    //
+    //     });
+
+    mymap
+}
+
+
+pub fn grail_file(file: &Path, dict: &Path, gamma:usize, coeffs:usize) -> Vec<LabelPixel> {
+    // read dictionary first;
+    let dic = read_dict::<f64>(dict.to_str().unwrap(),',');
+    // println!("dictionary shape: {} * {}", dic.rows(), dic.cols());
+
+    let mut grail = Kernel::new(dic,gamma,coeffs,1);
+    grail.dict_pre_process_v0();
+
+    BufReader::new(File::open(file).unwrap())
+        .lines()
+        .skip(0)
+        .map(|line| {
+            let line = line.unwrap();
+            let mut iter = line.trim()
+                .split(',')
+                .map(|x| f64::from_str(x).unwrap());
+
+            LabelPixel {
+                label: iter.next().unwrap() as isize,
+                pixels: {
+                    let mut batch_vec:Vec<f64> = iter.collect();
+                    let belesize = batch_vec.len();
+                    // println!("vec for matrix length: {}", belesize);
+                    let mut x = Array2::from_shape_vec((1,belesize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
+
+                    grail.run_v0(x)
+                }
             }
         })
         .collect()
@@ -249,4 +318,13 @@ pub fn classify(training: &[LabelPixel], pixels: &[f64]) -> isize {
 #[test]
 fn test_paa_on_file() {
     paa_file(&Path::new("../UCRArchive2018/Kernel/randomwalkdatasample1k-40k"), 1);
+}
+
+
+#[test]
+fn test_get_gammas() {
+    let gm=get_gamma(&Path::new("/Users/chunwei/research/TimeSeriesDB/database/script/data/gamma_ucr_new.csv"));
+    println!("map size: {}", gm.len());
+    let key = "ACSF1_TRAIN";
+    println!("{}", gm.get(key).unwrap());
 }

@@ -2,9 +2,10 @@ use tsz::stream::BufferedReader;
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
-use time_series_start::knn::{paa_file, classify, paa_buff_file, fft_file};
+use time_series_start::knn::{paa_file, classify, paa_buff_file, fft_file, grail_file, get_gamma};
 use std::env;
 use log::{ info};
+use std::borrow::Borrow;
 
 fn main() {
 
@@ -16,13 +17,29 @@ fn main() {
     let test_set = &args[2];
     let precision = args[3].parse::<f64>().unwrap();
     let window = 1;
+    let train_name = train_set.split('/').last().unwrap();
+    let root: &str = "/Users/chunwei/research/TimeSeriesDB/ucr_dict/";
+    let gm=get_gamma(&Path::new("/Users/chunwei/research/TimeSeriesDB/database/script/data/gamma_ucr_new.csv"));
+    if !(gm.contains_key(train_name)){
+        return;
+    }
+    let gamma= *gm.get(train_name).unwrap() as usize;
+    // println!("dataset: {} with gamma: {}",train_name,gamma);
+
+    let dict_file = format!("{}{}", root, train_name);
+    // println!("dict file: {} ",dict_file);
+
+
     // let window = args[4].parse::<i32>().unwrap();
 
     // let training_set = paa_buff_file(&Path::new(train_set),window,precision);
     // let validation_sample = paa_buff_file(&Path::new(test_set),window,precision);
 
-    let training_set = fft_file(&Path::new(train_set),precision);
-    let validation_sample = fft_file(&Path::new(test_set),precision);
+    // let training_set = fft_file(&Path::new(train_set),precision);
+    // let validation_sample = fft_file(&Path::new(test_set),precision);
+
+    let training_set = grail_file(&Path::new(train_set),&Path::new(&dict_file), gamma,usize::max_value());
+    let validation_sample = grail_file(&Path::new(test_set),&Path::new(&dict_file),gamma,usize::max_value());
 
     let num_correct = validation_sample.iter()
         .filter(|x| {

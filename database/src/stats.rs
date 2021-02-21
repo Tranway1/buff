@@ -1,11 +1,12 @@
 use std::time::SystemTime;
 use std::default::Default;
 use num::Num;
+use crate::compress::btr_array::{f_max, f_min};
 
 #[derive(Clone,Serialize,Deserialize,Debug,PartialEq)]
 pub struct Stats<T> {
-    star_timestamp: SystemTime,
-    end_timestamp: SystemTime,
+    star_timestamp: i64,
+    end_timestamp: i64,
     max: T,
     min: T,
     count: usize,
@@ -15,8 +16,8 @@ pub struct Stats<T> {
 
 
 impl<T> Stats<T>{
-    pub fn new(star_timestamp: SystemTime,
-               end_timestamp: SystemTime,
+    pub fn new(star_timestamp: i64,
+               end_timestamp: i64,
                max: T,
                min: T,
                count: usize,
@@ -33,7 +34,7 @@ impl<T> Stats<T>{
         }
     }
 
-    pub fn get_interval(&self) -> (SystemTime, SystemTime) {
+    pub fn get_interval(&self) -> (i64, i64) {
         (self.star_timestamp,self.end_timestamp)
     }
 
@@ -62,8 +63,8 @@ impl<T> Default for Stats<T>
     where T: Num + Default {
     fn default() -> Self {
         Stats{
-            star_timestamp: SystemTime::now(),
-            end_timestamp: SystemTime::now(),
+            star_timestamp: 0i64,
+            end_timestamp: 1i64,
             max: Default::default(),
             min: Default::default(),
             count: Default::default(),
@@ -71,4 +72,8 @@ impl<T> Default for Stats<T>
             sum: Default::default()
         }
     }
+}
+
+pub fn merge_adjacent(a: & Stats<f64>,b: & Stats<f64>) -> Stats<f64>{
+    Stats::new(a.star_timestamp,b.end_timestamp,f_max(a.max,b.max),f_min(a.min,b.min),a.count+b.count,(a.sum+b.sum)/((a.count+b.count) as f64),a.sum+b.sum)
 }
