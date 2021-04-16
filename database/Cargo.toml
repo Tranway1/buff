@@ -25,6 +25,10 @@ name = "knn"
 path = "src/knn/main.rs"
 
 [[bin]]
+name = "predict"
+path = "src/predict/main.rs"
+
+[[bin]]
 name = "avl_tree"
 path = "src/avl/main.rs"
 
@@ -72,3 +76,4 @@ permutation = "0.2.5"
 quickcheck = "0.9.2"
 quickcheck_macros = "0.9"
 #plotters = "0.2.15"
+myroaring = { version = "0.6.5", path = "../../roaring-rs" }

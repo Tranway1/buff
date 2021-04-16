@@ -2,12 +2,14 @@ pub mod split_double;
 pub mod sprintz;
 pub mod gorilla;
 pub mod btr_array;
+pub mod buff_simd;
+pub mod buff_slice;
 
 use std::{env, fs};
 use crate::client::construct_file_iterator_skip_newline;
 use crate::methods::compress::{SCALE, SplitDoubleCompress, test_split_compress_on_file, BPDoubleCompress, test_BP_double_compress_on_file, test_sprintz_double_compress_on_file, test_splitbd_compress_on_file, test_grillabd_compress_on_file, test_grilla_compress_on_file, GZipCompress, SnappyCompress, PRED, TEST_FILE};
 use std::time::{SystemTime, Instant};
-use crate::segment::Segment;
+use crate::segment::{Segment, FourierCompress, PAACompress};
 use std::path::Path;
 use std::rc::Rc;
 use parquet::file::properties::WriterProperties;
@@ -30,7 +32,7 @@ use core::mem;
 use crate::methods::prec_double::{PrecisionBound, get_precision_bound};
 
 lazy_static! {
-    static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
+    pub static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
         (2, 8),
         (3, 11),
         (4, 15),
@@ -50,7 +52,7 @@ lazy_static! {
 
 
 lazy_static! {
-    static ref FILE_MIN_MAX: HashMap<&'static str, (i64,i64)> =[("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", (-166032i64,415662i64)),
+    pub static ref FILE_MIN_MAX: HashMap<&'static str, (i64,i64)> =[("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", (-166032i64,415662i64)),
         ("/home/cc/TimeSeriesDB/taxi/dropoff_latitude-fulltaxi-1k.csv", (67193104i64,134089487i64)),
         ("/home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv", (9544233i64,9721774i64)),
         ("/home/cc/float_comp/signal/time_series_120rpm-c2-current.csv", (-78188537i64,80072697i64)),
@@ -980,7 +982,6 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
              1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
     )
 }
-
 
 
 #[test]

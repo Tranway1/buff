@@ -16,6 +16,7 @@ use ndarray_linalg::eigh;
 use std::time::Instant;
 use crate::segment::Segment;
 use crate::methods::compress::CompressionMethod;
+use std::fmt::Debug;
 
 #[derive(Clone )]
 pub struct Kernel<T> {
@@ -28,7 +29,7 @@ pub struct Kernel<T> {
     batchsize: usize
 }
 
-impl<'a,T: FFTnum + PartialOrd + std::fmt::Debug + Clone + Float  +Scalar + Lapack+ Serialize> Kernel<T> {
+impl<'a,T: FFTnum + PartialOrd + Debug + Clone + Float  +Scalar + Lapack+ Serialize> Kernel<T> {
     pub fn new( dictionary: Array2<T>, gamma: usize, coeffs: usize, batchsize: usize) -> Self {
         Kernel {
             dictionary: dictionary,

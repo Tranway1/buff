@@ -6,6 +6,10 @@ use std::mem;
 use crate::client::construct_file_iterator_skip_newline;
 use std::fmt::Debug;
 use serde::{Serialize, Deserialize};
+use std::time::{SystemTime, Instant};
+use crate::segment::Segment;
+use crate::compress::gorilla::GorillaCompress;
+use std::any::Any;
 
 pub const MAX_BITS: usize = 32;
 pub const BYTE_BITS: usize = 8;
@@ -244,6 +248,14 @@ impl<'a> BitPack<&'a [u8]> {
         let end = self.cursor+n;
         let output = &self.buff[self.cursor..end];
         self.cursor += n-1;
+        Ok(output)
+    }
+
+    #[inline]
+    pub fn read_n_byte_unmut(&self,start:usize, n:usize) -> Result<&[u8], usize> {
+        let s = start+self.cursor + 1;
+        let end =s+n;
+        let output = &self.buff[s..end];
         Ok(output)
     }
 
@@ -826,6 +838,25 @@ fn test_xor_f64() {
         pre = cur;
 
     }
+}
+
+
+#[test]
+fn run_gorilla_example_buff() {
+    let file_vec =  [0.66f64,1.41,1.41,1.50,2.72,3.14];
+
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.to_vec(),None,None);
+    let comp = GorillaCompress::new(10,10);
+    let start = Instant::now();
+    let compressed = comp.encode(&mut seg);
+    let duration = start.elapsed();
+    println!("Time elapsed in {:?} gorilla compress function() is: {:?}",comp.type_id(), duration);
+
+    let start1 = Instant::now();
+    let decomp = comp.decode(compressed);
+    let duration1 = start1.elapsed();
+    println!("decompressed vec:{:?}", decomp);
+    println!("Time elapsed in {:?} decompress function() is: {:?}",comp.type_id(), duration1);
 }
 
 #[test]

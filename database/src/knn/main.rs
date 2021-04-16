@@ -18,8 +18,8 @@ fn main() {
     let precision = args[3].parse::<f64>().unwrap();
     let window = 1;
     let train_name = train_set.split('/').last().unwrap();
-    let root: &str = "/Users/chunwei/research/TimeSeriesDB/ucr_dict/";
-    let gm=get_gamma(&Path::new("/Users/chunwei/research/TimeSeriesDB/database/script/data/gamma_ucr_new.csv"));
+    let root: &str = "../ucr_dict/";
+    let gm=get_gamma(&Path::new("../database/script/data/gamma_ucr_new.csv"));
     if !(gm.contains_key(train_name)){
         return;
     }

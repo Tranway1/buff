@@ -3,6 +3,8 @@ use time_series_start::compress::{run_bpsplit_encoding_decoding, run_gorilla_enc
 use log::{error, info, warn};
 use log4rs;
 use time_series_start::avl::btrarr::run_btr_array_index;
+use time_series_start::compress::buff_simd::run_buff_simd_encoding_decoding;
+use time_series_start::compress::buff_slice::run_buff_slice_encoding_decoding;
 
 fn main() {
     log4rs::init_file("config/log4rs.yaml", Default::default()).unwrap();
@@ -33,6 +35,12 @@ fn main() {
         },
         "byteall" => {
             run_splitdouble_byte_encoding_decoding(input_file,int_scale,pred);
+        },
+        "buff-simd" => {
+            run_buff_simd_encoding_decoding(input_file,int_scale,pred);
+        },
+        "buff-slice" => {
+            run_buff_slice_encoding_decoding(input_file,int_scale,pred);
         },
         "RAPG" => {
             run_splitdouble_byte_residue_encoding_decoding(input_file,int_scale,pred);

@@ -86,10 +86,8 @@ impl<T> GorillaEncoder<T>
         // write one control bit so we can distinguish a stream which contains only an initial
         // timestamp, this assumes the first bit of the END_MARKER is 1
         self.w.write_bit(Bit::Zero);
-
         // store the first value exactly
         self.w.write_bits(self.value_bits, 64);
-
         self.first = true
     }
 
@@ -187,6 +185,99 @@ impl<T> GorillaEncoder<T>
                 self.leading_zeroes = leading_zeroes;
                 self.trailing_zeroes = trailing_zeroes;
                 //todo: add logics to avoid 0 leading and 0 trailing cases.
+            }
+
+        }
+    }
+
+    fn write_first_float_with_print(&mut self, value_bits: u64) {
+        self.value_bits = value_bits;
+
+        // write one control bit so we can distinguish a stream which contains only an initial
+        // timestamp, this assumes the first bit of the END_MARKER is 1
+        self.w.write_bit(Bit::Zero);
+        println!("write first value start with label:{:?}", Bit::Zero);
+
+        // store the first value exactly
+        self.w.write_bits(self.value_bits, 64);
+        println!("write first value:{:b}", self.value_bits);
+        self.first = true
+    }
+
+    fn write_next_value_with_print(&mut self, value_bits: u64) {
+        let xor = value_bits ^ self.value_bits;
+        self.value_bits = value_bits;
+
+        if xor == 0 {
+            // if xor with previous value is zero just store single zero bit
+            self.w.write_bit(Bit::Zero);
+            println!("write value start with label:{:?}", Bit::Zero);
+        } else {
+            self.w.write_bit(Bit::One);
+            println!("write value start with label:{:?}", Bit::One);
+
+            let leading_zeroes = xor.leading_zeros();
+            let trailing_zeroes = xor.trailing_zeros();
+
+            // if (leading_zeroes + trailing_zeroes) >= (self.leading_zeroes + self.trailing_zeroes+16){
+            //
+            //
+            //     // if the number of leading and trailing zeroes in this xor are not less than the
+            //     // leading and trailing zeroes in the previous xor then we store a control bit and
+            //     // use 6 bits to store the number of leading zeroes and 6 bits to store the number
+            //     // of significant digits before storing the significant digits themselves
+            //
+            //     self.w.write_bit(Bit::One);
+            //     self.w.write_bits(leading_zeroes as u64, 6);
+            //
+            //     // if significant_digits is 64 we cannot encode it using 6 bits, however since
+            //     // significant_digits is guaranteed to be at least 1 we can subtract 1 to ensure
+            //     // significant_digits can always be expressed with 6 bits or less
+            //     let significant_digits = 64 - leading_zeroes - trailing_zeroes;
+            //     self.w.write_bits((significant_digits - 1) as u64, 6);
+            //     self.w.write_bits(xor.wrapping_shr(trailing_zeroes), significant_digits);
+            //
+            //     // finally we need to update the number of leading and trailing zeroes
+            //     self.leading_zeroes = leading_zeroes;
+            //     self.trailing_zeroes = trailing_zeroes;
+            // }
+            // else
+            // println!("leading_zeroes:{}, trailling zeros:{}; self.leading_zeroes:{}, self.trailling zeros:{}", leading_zeroes,trailing_zeroes,self.leading_zeroes, self.trailing_zeroes);
+            if leading_zeroes >= self.leading_zeroes && trailing_zeroes >= self.trailing_zeroes {
+                // if the number of leading and trailing zeroes in this xor are >= the leading and
+                // trailing zeroes in the previous xor then we only need to store a control bit and
+                // the significant digits of this xor
+                self.w.write_bit(Bit::Zero);
+                // println!("{:?}", Bit::Zero);
+                let diff =xor.wrapping_shr(self.trailing_zeroes);
+                // println!("diff part: {:b} with length:{}", diff, 64 - self.leading_zeroes - self.trailing_zeroes);
+                self.w.write_bits(diff, 64 - self.leading_zeroes - self.trailing_zeroes);
+                // self.w.write_bits(xor.wrapping_shr(self.trailing_zeroes),
+                //                   64 - self.leading_zeroes - self.trailing_zeroes);
+            } else {
+
+                // if the number of leading and trailing zeroes in this xor are not less than the
+                // leading and trailing zeroes in the previous xor then we store a control bit and
+                // use 6 bits to store the number of leading zeroes and 6 bits to store the number
+                // of significant digits before storing the significant digits themselves
+
+                self.w.write_bit(Bit::One);
+                self.w.write_bits(leading_zeroes as u64, 6);
+                println!("{:?}", Bit::One);
+                println!("leading 0s: {}", leading_zeroes);
+                // if significant_digits is 64 we cannot encode it using 6 bits, however since
+                // significant_digits is guaranteed to be at least 1 we can subtract 1 to ensure
+                // significant_digits can always be expressed with 6 bits or less
+                let significant_digits = 64 - leading_zeroes - trailing_zeroes;
+                self.w.write_bits((significant_digits - 1) as u64, 6);
+                let diff = xor.wrapping_shr(trailing_zeroes);
+                self.w.write_bits(diff, significant_digits);
+                // self.w.write_bits(xor.wrapping_shr(trailing_zeroes), significant_digits);
+                println!("significant_digits length -1: {:?}", (significant_digits - 1));
+                println!("diff part: {:b} with length:{}", diff, significant_digits);
+                // finally we need to update the number of leading and trailing zeroes
+                self.leading_zeroes = leading_zeroes;
+                self.trailing_zeroes = trailing_zeroes;
             }
 
         }

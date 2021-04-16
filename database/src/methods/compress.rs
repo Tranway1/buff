@@ -9,7 +9,7 @@ extern crate bitpacking;
 use bitpacking::{BitPacker4x, BitPacker};
 use std::vec::Vec;
 use croaring::Bitmap;
-use tsz::{DataPoint, Encode, Decode, StdEncoder, StdDecoder};
+use tsz::{DataPoint,StdEncoder, StdDecoder};
 use tsz::stream::{BufferedReader, BufferedWriter};
 use tsz::decode::Error;
 use flate2::read::GzDecoder;
@@ -24,12 +24,12 @@ use self::flate2::write::DeflateEncoder;
 use parity_snappy as snappy;
 use parity_snappy::{compress, decompress};
 use std::time::{SystemTime, Instant};
-use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
+use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed, read_dict};
 use crate::methods::Methods::Fourier;
 use self::bitpacking::BitPacker1x;
 use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack, bp_double_encoder, sprintz_double_encoder, unzigzag, BYTE_BITS};
 use std::str::FromStr;
-use num::{FromPrimitive, Num};
+use num::{FromPrimitive, Num, Float};
 use rustfft::FFTnum;
 use crate::methods::fcm_encoder::FCMCompressor;
 use std::hash::Hash;
@@ -39,10 +39,15 @@ use crate::methods::gorilla_encoder::{GorillaEncoder, SepEncode};
 use crate::methods::gorilla_decoder::{GorillaDecoder, SepDecode};
 use std::any::Any;
 use std::collections::HashMap;
-use rustfft::num_traits::real::Real;
 use crate::compress::split_double::SplitBDDoubleCompress;
 use crate::compress::sprintz::SprintzDoubleCompress;
 use crate::compress::gorilla::{GorillaBDCompress, GorillaCompress};
+use crate::knn::{grail_file, get_gamma};
+use std::path::Path;
+use std::fmt::Debug;
+use ndarray_linalg::{Scalar, Lapack};
+use crate::compress::PRECISION_MAP;
+use self::tsz::{Encode, Decode};
 
 pub const TYPE_LEN:usize = 8usize;
 pub const SCALE: f64 = 1.0f64;
@@ -51,26 +56,6 @@ pub const PRECISION:i32 = 100000;
 pub const PREC_DELTA:f64 = 0.000005f64;
 // pub const TEST_FILE:&str = "../taxi/dropoff_latitude-fulltaxi-1k.csv";
 pub const TEST_FILE:&str = "../UCRArchive2018/Kernel/randomwalkdatasample1k-40k";
-
-
-lazy_static! {
-    static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
-        (2, 8),
-        (3, 11),
-        (4, 15),
-        (5, 18),
-        (6, 21),
-        (7, 25),
-        (8, 28),
-        (9, 31),
-        (10, 35),
-        (11, 38),
-        (12, 50),
-        (13, 10),
-        (14, 10),
-        (15, 10)]
-        .iter().cloned().collect();
-}
 
 
 pub trait CompressionMethod<T> {
@@ -1332,6 +1317,7 @@ pub fn test_paa_compress_on_int_file(file:&str,scl:i32){
     println!("{},    {}", 1.0/window as f32, throughput);
 }
 
+// parse file into vector and apply fft on whole vector
 pub fn test_fourier_compress_on_file<'a,T>(file:&str)
     where T: FromStr + Clone + FFTnum +Serialize+ Deserialize<'a>{
     let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
@@ -1342,6 +1328,67 @@ pub fn test_fourier_compress_on_file<'a,T>(file:&str)
     let compressed = fourier_compress(&mut seg);
     let duration = start.elapsed();
     info!("Time elapsed in Fourier compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
+    println!("1,    {}", throughput);
+}
+
+pub fn test_fourier_compress_on_file_per_line<'a,T>(file:&str)
+    where T: FromStr + Clone + FFTnum +Serialize+ Deserialize<'a>{
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let file_vec: Vec<T> = file_iter.unwrap().collect();
+    let start = Instant::now();
+    let comp = FourierCompress::new(10,10);
+    let comp = FourierCompress::new(10,10);
+    for chunk in file_vec.chunks(999) {
+        let mut seg = Segment::new(None,SystemTime::now(),0,chunk.to_vec(),None,None);
+        let compressed = fourier_compress(&mut seg);
+    }
+
+    let duration = start.elapsed();
+    info!("Time elapsed in Fourier compress function() is: {:?}", duration);
+    //let decompress = comp.decode(compressed);
+    //println!("expected datapoints: {:?}", decompress);
+    let org_size = file_vec.len() * mem::size_of::<T>();
+    let throughput = 1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0;
+    println!("1,    {}", throughput);
+}
+
+pub fn test_grail_compress_on_file<'a,T>(file:&str)
+    where T: FromStr + Clone + FFTnum +Serialize+ Debug + Float  +Scalar + Lapack {
+
+    let file_iter = construct_file_iterator_skip_newline::<T>(file, 1, ',');
+    let mut file_vec: Vec<T> = file_iter.unwrap().collect();
+
+    let train_name = "randomwalkdatasample1k-40k";
+    let gm=get_gamma(&Path::new("../database/script/data/gamma_ucr_new.csv"));
+    if !(gm.contains_key(train_name)){
+        return;
+    }
+    let gamma= *gm.get(train_name).unwrap() as usize;
+    // println!("dataset: {} with gamma: {}",train_name,gamma);
+
+    let dict_file = "../UCRArchive2018/Kernel/cbf-dict-999.tsv";
+
+    let dic = read_dict::<T>(dict_file,',');
+    println!("dictionary shape: {} * {}", dic.rows(), dic.cols());
+    let batch = dic.rows();
+    let len = dic.cols();
+    let num = batch*len;
+
+
+    let mut grail = Kernel::new(dic,gamma,usize::max_value(),batch);
+    let start = Instant::now();
+    grail.dict_pre_process_v0();
+
+    for chunk in file_vec.chunks_mut(num) {
+        let mut cur_batch = Array2::from_shape_vec((batch,len),mem::replace(&mut chunk.to_vec(), Vec::with_capacity(num))).unwrap();
+        grail.run_v0(cur_batch);
+    }
+    let duration = start.elapsed();
+    info!("Time elapsed in Grail compress function() is: {:?}", duration);
     //let decompress = comp.decode(compressed);
     //println!("expected datapoints: {:?}", decompress);
     let org_size = file_vec.len() * mem::size_of::<T>();
