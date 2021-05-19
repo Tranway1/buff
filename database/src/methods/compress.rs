@@ -419,6 +419,52 @@ impl GZipCompress {
         println!("Max: {}", max);
         println!("Number of qualified items for max:{}", res.cardinality());
     }
+
+
+    pub(crate) fn max_range(&self, bytes: Vec<u8>,st:u32, ed:u32, window:u32){
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        info!("size read:{}, original size:{}", ct, s.len());
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        let mut max =  std::f64::MIN;
+        let mut cur_s = st;
+        let mut max_vec = Vec::new();
+
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if i<st {
+                        i+=1;
+                        continue;
+                    }else if i>=ed {
+                        break;
+                    }
+                    if i==cur_s+window{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =std::f64::MIN;
+                        cur_s=i;
+                    }
+
+                    if (*e )>max{
+                        max = *e;
+                        res.remove_range(cur_s as u64 .. i as u64);
+                        res.add(i);
+                    }else if (*e )==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        max_vec.push(max);
+        println!("Max: {:?}",max_vec);
+        println!("Number of qualified items for max_groupby:{}", res.cardinality());
+    }
 }
 
 impl<'a, T> CompressionMethod<T> for GZipCompress
@@ -706,6 +752,51 @@ impl SnappyCompress {
         // res.run_optimize();
         println!("Max: {}",max);
         println!("Number of qualified items for max:{}", res.cardinality());
+    }
+
+    pub(crate) fn max_range(&self, bytes: Vec<u8>,st:u32, ed:u32, window:u32)  {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut res = Bitmap::create();
+        let mut i = 0;
+        let mut max = std::f64::MIN;
+        let mut cur_s = st;
+        let mut max_vec = Vec::new();
+
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if i<st {
+                        i+=1;
+                        continue;
+                    }else if i>=ed {
+                        break;
+                    }
+                    if i==cur_s+window{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =std::f64::MIN;
+                        cur_s=i;
+                    }
+
+                    if (*e )>max{
+                        max = *e;
+                        res.remove_range(cur_s as u64 .. i as u64);
+                        res.add(i);
+                    }
+                    else if (*e )==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        // res.run_optimize();
+        max_vec.push(max);
+        println!("Max: {:?}",max_vec);
+        println!("Number of qualified items for max_groupby:{}", res.cardinality());
     }
 }
 

@@ -6,7 +6,7 @@ use log::{info, trace, warn};
 use std::hash::Hash;
 use num::Num;
 use serde::Serialize;
-use serde::export::PhantomData;
+use serde::__private::PhantomData;
 
 //#[derive(Hash, Eq, PartialEq, Debug)]
 pub struct FCMCompressor<'a,T> {

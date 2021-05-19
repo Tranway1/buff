@@ -45,6 +45,7 @@ pub mod segment;
 pub mod methods;
 pub mod predict;
 pub mod simd;
+pub mod benchmark;
 mod future_signal;
 pub mod client;
 mod query;

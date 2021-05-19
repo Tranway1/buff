@@ -235,6 +235,61 @@ impl GorillaCompress {
         println!("Number of qualified items for max:{}", res.cardinality());
     }
 
+
+    pub(crate) fn max_range(&self, bytes: Vec<u8>,s:u32, e:u32, window:u32)  {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut max =std::f64::MIN;
+        let mut max_vec = Vec::new();
+
+        let mut done = false;
+        let mut i=0;
+        let mut res = Bitmap::create();
+        let mut cur_s = s;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    if i<s {
+                        i+=1;
+                        continue;
+                    }else if i>=e {
+                        break;
+                    }
+                    if i==cur_s+window{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =std::f64::MIN;
+                        cur_s=i;
+                    }
+
+                    if dp>max {
+                        max = dp;
+                        res.remove_range(cur_s as u64 .. i as u64);
+                        res.add(i);
+                    }
+                    else if dp==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        max_vec.push(max);
+        println!("Max: {:?}",max_vec);
+        println!("Number of qualified items for max:{}", res.cardinality());
+    }
+
 }
 
 impl<'a, T> CompressionMethod<T> for GorillaCompress
@@ -496,6 +551,62 @@ impl GorillaBDCompress {
         // res.run_optimize();
         println!("Max: {}",max);
         println!("Number of qualified items for max:{}", res.cardinality());
+
+    }
+
+
+    pub(crate) fn max_range(&self, bytes: Vec<u8>,s:u32, e:u32, window:u32) {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+
+        let mut max = std::f64::MIN;
+        let mut max_vec = Vec::new();
+
+        let mut done = false;
+        let mut i=0;
+        let mut isqualify = true;
+        let mut res = Bitmap::create();
+        let mut cur_s = s;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    if i<s {
+                        i+=1;
+                        continue;
+                    }else if i>=e {
+                        break;
+                    }
+                    if i==cur_s+window{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =std::f64::MIN;
+                        cur_s=i;
+                    }
+                    if dp>max {
+                        max = dp;
+                        res.remove_range(cur_s as u64 .. i as u64);
+                        res.add(i);
+                    }else if dp==max {
+                        res.add(i);
+                    }
+                    i+=1;
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        max_vec.push(max);
+        println!("Max: {:?}",max_vec);
+        println!("Number of qualified items for max_groupby:{}", res.cardinality());
 
     }
 }

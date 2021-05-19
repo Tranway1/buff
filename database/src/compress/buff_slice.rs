@@ -7,14 +7,13 @@ use crate::methods::bit_packing::{BitPack, BYTE_BITS};
 use crate::simd::vectorize_query::{range_simd_myroaring, equal_simd_myroaring};
 use std::mem;
 use log::info;
-use croaring::Bitmap;
-use myroaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
 use tsz::stream::BufferedWriter;
 use itertools::Itertools;
 use crate::compress::PRECISION_MAP;
 use std::arch::x86_64::{__m256i, _mm256_set1_epi8, _mm256_lddqu_si256, _mm256_cmpeq_epi8, _mm256_movemask_epi8, _mm256_cmpgt_epi8, _mm256_and_si256, _mm256_or_si256, _mm256_testz_si256};
 use std::ptr::eq;
+use my_bit_vec::BitVec;
 
 pub const BYTE_WORD:u32 = 32u32;
 
@@ -54,15 +53,24 @@ pub fn run_buff_slice_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     println!("Time elapsed in buff slice equal filter function() is: {:?}", duration4);
 
     let start5 = Instant::now();
-    // comp.byte_fixed_sum(comp_sum);
+    comp.buff_slice_range_filter_nosimd(comp_sum,pred);
     let duration5 = start5.elapsed();
-    println!("Time elapsed in buff slice sum function() is: {:?}", duration5);
+    println!("Time elapsed in buff slice range no simd function() is: {:?}", duration5);
 
     let start6 = Instant::now();
-    // comp.byte_fixed_max(comp_max);
+    comp.buff_slice_equal_filter_nosimd(comp_max,pred);
     let duration6 = start6.elapsed();
-    println!("Time elapsed in buff slice max function() is: {:?}", duration6);
+    println!("Time elapsed in buff slice eqaul no simd function() is: {:?}", duration6);
 
+    // println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    //          comp_size as f64/ org_size as f64,
+    //          duration1.as_nanos() as f64 / 1000000.0,
+    //          duration2.as_nanos() as f64 / 1000000.0,
+    //          duration3.as_nanos() as f64 / 1000000.0,
+    //          duration4.as_nanos() as f64 / 1000000.0,
+    //          duration5.as_nanos() as f64 / 1000000.0,
+    //          duration6.as_nanos() as f64 / 1000000.0
+    // )
 
     println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
              comp_size as f64/ org_size as f64,
@@ -459,7 +467,8 @@ impl BuffSliceCompress {
         let mut slice_ptr = Vec::new();
 
         bound.set_length(ilen as u64, dlen as u64);
-        let mut res = RoaringBitmap::new();
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut resv = Vec::new();
         let target = pred;
         let fixed_part = bound.fetch_fixed_aligned(target);
 
@@ -479,14 +488,13 @@ impl BuffSliceCompress {
             }
             else {
                 let pad = 8*(1+cnt)-remain;
-                pred_u8= flip((fixed_target << pad) as u8)
+                pred_u8= flip((fixed_target << pad) as u8);
             }
             target_byte.push(pred_u8);
             target_word.push(set_pred_word(pred_u8));
 
         }
 
-        let mut res_bm = RoaringBitmap::new();
         let mut i = 0;
         unsafe {
             while i <= len - BYTE_WORD {
@@ -519,12 +527,12 @@ impl BuffSliceCompress {
                     }
                 }
                 let gt_mask = _mm256_movemask_epi8(greater);
-                res.insert_direct_u32(i, mem::transmute::<i32, u32>(gt_mask));
+                resv.push(mem::transmute::<i32, u32>(gt_mask));
                 i += BYTE_WORD;
             }
         }
-        res.optimize();
-        println!("Number of qualified items:{}", res.len());
+        res.set_storage(&resv);
+        println!("Number of qualified items:{}", res.cardinality());
     }
 
 
@@ -553,7 +561,8 @@ impl BuffSliceCompress {
 
         bound.set_length(ilen as u64, dlen as u64);
         // check integer part and update bitmap;
-        let mut res = RoaringBitmap::new();
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut resv  = Vec::new();
         let target = pred;
         let fixed_part = bound.fetch_fixed_aligned(target);
         if fixed_part<base_int{
@@ -572,14 +581,14 @@ impl BuffSliceCompress {
             }
             else {
                 let pad = 8*(1+cnt)-remain;
-                pred_u8= flip((fixed_target << pad) as u8)
+                pred_u8= flip((fixed_target << pad) as u8);
             }
             target_byte.push(pred_u8);
             target_word.push(set_pred_word(pred_u8));
 
         }
 
-        let mut res_bm = RoaringBitmap::new();
+
         let mut i = 0;
         unsafe {
             while i <= len - BYTE_WORD {
@@ -605,14 +614,232 @@ impl BuffSliceCompress {
                     }
                 }
                 let eq_mask = _mm256_movemask_epi8(equal);
-                res.insert_direct_u32(i, mem::transmute::<i32, u32>(eq_mask));
+                resv.push(mem::transmute::<i32, u32>(eq_mask));
                 i += BYTE_WORD;
             }
         }
-        res.optimize();
-        println!("Number of qualified items:{}", res.len());
+        res.set_storage(&resv);
+        println!("Number of qualified items:{}", res.cardinality());
     }
 
+
+
+    pub(crate) fn buff_slice_range_filter_nosimd(&self, bytes: Vec<u8>, pred:f64) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap() as usize;
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain = dlen+ilen;
+        let num_slice = ceil(remain, 8);
+        let mut data = Vec::new();
+        let mut target_byte = Vec::new();
+        let mut target_word = Vec::new();
+        let mut slice_ptr = Vec::new();
+
+        bound.set_length(ilen as u64, dlen as u64);
+        let mut res = BitVec::from_elem(len, false);
+        let target = pred;
+        let fixed_part = bound.fetch_fixed_aligned(target);
+
+        if fixed_part<base_int{
+            println!("Number of qualified items:{}", len);
+            return;
+        }
+        let fixed_target = (fixed_part-base_int) as u64;
+        println!("fixed target:{}", fixed_target);
+        for cnt in 0..num_slice{
+            let chunk = bitpack.read_n_byte_unmut(cnt as usize * len, len).unwrap();
+            slice_ptr.push(chunk.as_ptr());
+            data.push(chunk);
+            let mut pred_u8= 0;
+            if (remain-8*cnt>=8){
+                pred_u8 =(fixed_target >> (remain - 8 * (1 + cnt))) as u8;
+            }
+            else {
+                let pad = 8*(1+cnt)-remain;
+                pred_u8= (fixed_target << pad) as u8;
+            }
+            target_byte.push(pred_u8);
+            target_word.push(set_pred_word(pred_u8));
+
+        }
+
+
+        let mut i = 0;
+        unsafe {
+            while i < len {
+                let mut tbd = true;
+                let mut word = flip(*slice_ptr.get(0).unwrap().add(i));
+                if word>*target_byte.get(0).unwrap(){
+                    tbd = false;
+                    res.set(i,true);
+                    i += 1;
+                    continue
+                }
+                else if word<*target_byte.get(0).unwrap(){
+                    tbd = false;
+                    i += 1;
+                    continue
+                }
+
+                if num_slice > 1 && tbd{
+                    let mut word1= flip(*slice_ptr.get(1).unwrap().add(i));
+                    if word1>*target_byte.get(1).unwrap(){
+                        tbd = false;
+                        res.set(i,true);
+                        i += 1;
+                        continue
+                    }
+                    else if word1<*target_byte.get(1).unwrap(){
+                        tbd = false;
+                        i += 1;
+                        continue
+                    }
+
+                    if num_slice > 2 && tbd{
+                        let mut word2 = flip(*slice_ptr.get(2).unwrap().add(i));
+                        if word2>*target_byte.get(2).unwrap(){
+                            tbd = false;
+                            res.set(i,true);
+                            i += 1;
+                            continue
+                        }
+                        else if word2<*target_byte.get(2).unwrap(){
+                            tbd = false;
+                            i += 1;
+                            continue
+                        }
+
+                        if num_slice > 3 && tbd{
+                            let mut word3 = flip(*slice_ptr.get(3).unwrap().add(i));
+                            if word3>*target_byte.get(3).unwrap(){
+                                tbd = false;
+                                res.set(i,true);
+                                i += 1;
+                                continue
+                            }
+                            else if word3<*target_byte.get(3).unwrap(){
+                                tbd = false;
+                                i += 1;
+                                continue
+                            }
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        println!("Number of qualified items:{}", res.cardinality());
+    }
+
+
+    pub(crate) fn buff_slice_equal_filter_nosimd(&self, bytes: Vec<u8>, pred:f64) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        // println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap() as usize;
+        // println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        // println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let remain =dlen+ilen;
+        let num_slice = ceil(remain, 8);
+        let mut data = Vec::new();
+        let mut target_byte = Vec::new();
+        let mut target_word = Vec::new();
+        let mut slice_ptr = Vec::new();
+
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut resv  = Vec::new();
+        let target = pred;
+        let fixed_part = bound.fetch_fixed_aligned(target);
+        if fixed_part<base_int{
+            println!("Number of qualified items:{}", len);
+            return;
+        }
+        let fixed_target = (fixed_part-base_int) as u64;
+
+        for cnt in 0..num_slice{
+            let chunk = bitpack.read_n_byte_unmut(cnt as usize*len, len).unwrap();
+            slice_ptr.push(chunk.as_ptr());
+            data.push(chunk);
+            let mut pred_u8= 0;
+            if (remain-8*cnt>=8){
+                pred_u8 =flip((fixed_target >> (remain - 8 * (1 + cnt))) as u8);
+            }
+            else {
+                let pad = 8*(1+cnt)-remain;
+                pred_u8= flip((fixed_target << pad) as u8);
+            }
+            target_byte.push(pred_u8);
+            target_word.push(set_pred_word(pred_u8));
+
+        }
+
+
+        let mut i = 0;
+        unsafe {
+            while i < len {
+                let mut tbd = true;
+                let mut word = *slice_ptr.get(0).unwrap().add(i);
+                if word!=*target_byte.get(0).unwrap(){
+                    tbd = false;
+                    i += 1;
+                    continue
+                }
+                if num_slice > 1 && tbd{
+                    let mut word1= *slice_ptr.get(1).unwrap().add(i);
+                    if word1!=*target_byte.get(1).unwrap(){
+                        tbd = false;
+                        i += 1;
+                        continue
+                    }
+
+                    if num_slice > 2 && tbd{
+                        let mut word2 = *slice_ptr.get(2).unwrap().add(i);
+                        if word2!=*target_byte.get(2).unwrap(){
+                            tbd = false;
+                            i += 1;
+                            continue
+                        }
+
+                        if num_slice > 3 && tbd{
+                            let mut word3 = *slice_ptr.get(3).unwrap().add(i);
+                            if word3!=*target_byte.get(3).unwrap(){
+                                tbd = false;
+                                i += 1;
+                                continue
+                            }
+                        }
+                    }
+                }
+                res.set(i,true);
+                i += 1;
+            }
+        }
+        res.set_storage(&resv);
+        println!("Number of qualified items:{}", res.cardinality());
+    }
 }
 
 impl<'a, T> CompressionMethod<T> for BuffSliceCompress

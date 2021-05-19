@@ -22,8 +22,8 @@ bash script/float_compress.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 1000000 75
 mv performance.csv pmu_p1_L1MAG-performance.csv
 rm new.out
 
-bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 2.891158 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 20.774518 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 2.891158 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/vm_cpu_readings-file-19-20_c4-avg.csv 1000000 80.980372 5 >> new.out
 mv performance.csv cpu19-20-performance.csv
 rm new.out

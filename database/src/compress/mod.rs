@@ -4,6 +4,7 @@ pub mod gorilla;
 pub mod btr_array;
 pub mod buff_simd;
 pub mod buff_slice;
+pub mod scaled_slice;
 
 use std::{env, fs};
 use crate::client::construct_file_iterator_skip_newline;
@@ -18,7 +19,8 @@ use parquet::basic::{Encoding, Compression};
 use crate::methods::parquet::{DICTPAGE_LIM, USE_DICT};
 use parquet::file::writer::{SerializedFileWriter, FileWriter};
 use parquet::column::writer::ColumnWriter;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use croaring::Bitmap;
 use parquet::file::reader::{SerializedFileReader, FileReader};
 use parquet::record::RowAccessor;
@@ -982,7 +984,6 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
              1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0
     )
 }
-
 
 #[test]
 fn test_given_min_max() {

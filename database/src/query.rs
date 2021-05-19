@@ -1,3 +1,4 @@
+pub mod bit_vec_iter;
 
 use std::time::SystemTime;
 use std::fmt;

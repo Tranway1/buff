@@ -188,7 +188,7 @@ impl<'a> BitPack<&'a [u8]> {
     }
 
     /***
-    read bits less then BYTE_BITS
+    read bits less than BYTE_BITS
      */
 
     #[inline]
@@ -398,7 +398,7 @@ pub(crate) fn num_bits(mydata: &[u32]) -> u8{
     bits
 }
 
-pub(crate) fn delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
+pub fn delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
     // info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
@@ -440,7 +440,7 @@ pub fn unzigzag(origin: u32) -> i32{
 }
 
 // delta calculation for sprintz
-pub(crate) fn zigzag_delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
+pub fn zigzag_delta_num_bits(mydata: &[i32]) -> (i32, u8,Vec<u32>){
     info!("10th vec: {},{},{},{}", mydata[0],mydata[1],mydata[2],mydata[3]);
     let mut vec = Vec::new();
     let mut xor:u32 = 0;
