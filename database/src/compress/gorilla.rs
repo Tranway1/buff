@@ -10,6 +10,7 @@ use tsz::decode::Error;
 use croaring::Bitmap;
 use crate::methods::compress::CompressionMethod;
 use crate::methods::prec_double::{get_precision_bound, PrecisionBound};
+use std::slice::Iter;
 
 #[derive(Clone)]
 pub struct GorillaCompress {
@@ -74,6 +75,49 @@ impl GorillaCompress {
                     // }
                     // i += 1;
                     expected_datapoints.push(dp);
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+
+    pub(crate) fn decode_condition(&self, bytes: Vec<u8>, cond:Iter<usize>) -> Vec<f64> {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut iter = cond.clone();
+        let mut it =iter.next();
+        let mut point = *it.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut i = 0;
+        let mut done = false;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    // if i<10 {
+                    //     println!("{}",dp);
+                    // }
+                    if i==point{
+                        expected_datapoints.push(dp);
+                        it=iter.next();
+                        if it==None{
+                            break;
+                        }
+                        point = *it.unwrap();
+                    }
+                    i += 1;
                 },
                 Err(err) => {
                     if err == Error::EndOfStream {
@@ -386,6 +430,45 @@ impl GorillaBDCompress {
                     // }
                     // i += 1;
                     expected_datapoints.push(dp);
+                },
+                Err(err) => {
+                    if err == Error::EndOfStream {
+                        done = true;
+                    } else {
+                        panic!("Received an error from decoder: {:?}", err);
+                    }
+                }
+            };
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    pub(crate) fn decode_condition(&self, bytes: Vec<u8>,cond:Iter<usize>) -> Vec<f64> {
+        let r = BufferedReader::new(bytes.into_boxed_slice());
+        let mut decoder = GorillaDecoder::new(r);
+        let mut iter = cond.clone();
+        let mut it = iter.next();
+        let mut point = *it.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut i = 0;
+        let mut done = false;
+        loop {
+            if done {
+                break;
+            }
+
+            match decoder.next_val() {
+                Ok(dp) => {
+                    if i==point{
+                        expected_datapoints.push(dp);
+                        it = iter.next();
+                        if it==None{
+                            break;
+                        }
+                        point = *it.unwrap();
+                    }
+                    i += 1;
                 },
                 Err(err) => {
                     if err == Error::EndOfStream {

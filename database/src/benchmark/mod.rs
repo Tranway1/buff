@@ -104,6 +104,26 @@ fn prepare_benchmark_data(file:&str, comp:&str, scl:usize){
 
 }
 
+pub fn get_comp_file(file:&str, compression: &str) ->Vec<u8>
+{
+    let mut path = BENCH_DATA.to_owned();
+    path.push_str(file);
+    path.push_str(".");
+    path.push_str(compression);
+    let binary = read_a_file(&path).unwrap();
+    binary
+}
+
+pub fn get_csv_file(f:&str) ->Vec<usize>
+{
+    let mut file = BENCH_DATA.to_owned();
+    file.push_str(f);
+
+    let file_iter = construct_file_iterator_skip_newline::<usize>(&file, 0, ',');
+    let file_vec: Vec<usize> = file_iter.unwrap().collect();
+    file_vec
+}
+
 #[test]
 fn test_compresse_bench_data(){
     let mut encodings: [&str; 9] = ["buff", "buff-major","gorilla","gorillabd","snappy","gzip","fixed","sprintz","buff-slice"];

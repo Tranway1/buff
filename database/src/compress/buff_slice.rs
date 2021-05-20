@@ -14,6 +14,7 @@ use crate::compress::PRECISION_MAP;
 use std::arch::x86_64::{__m256i, _mm256_set1_epi8, _mm256_lddqu_si256, _mm256_cmpeq_epi8, _mm256_movemask_epi8, _mm256_cmpgt_epi8, _mm256_and_si256, _mm256_or_si256, _mm256_testz_si256};
 use std::ptr::eq;
 use my_bit_vec::BitVec;
+use std::slice::Iter;
 
 pub const BYTE_WORD:u32 = 32u32;
 
@@ -439,6 +440,88 @@ impl BuffSliceCompress {
         // for i in 0..10{
         //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())
         // }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+
+    pub fn buff_slice_decode_condition(&self, bytes: Vec<u8>,cond:Iter<usize>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let padding = num*8-ilen-dlen;
+        match num {
+            1=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                for &elem in cond{
+                    expected_datapoints.push((base_int + ((flip(*chunk0.get(elem).unwrap()) as u64)>>padding) as i64 ) as f64 / dec_scl);
+                }
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap().clone();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                for &elem in cond{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(elem).unwrap()) as u64)<<(8-padding)) ) |
+                        ((flip(*chunk1.get(elem).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+                }
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                for &elem in cond{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(elem).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk1.get(elem).unwrap()) as u64)<<(8-padding) )as u64) |
+                        ((flip(*chunk2.get(elem).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+                }
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                for &elem in cond{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(elem).unwrap()) as u64)<<(24-padding) )as u64)|
+                        (((flip(*chunk1.get(elem).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk2.get(elem).unwrap()) as u64)<<(8-padding)) as u64) |
+                        ((flip(*chunk3.get(elem).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+
+                }
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
     }

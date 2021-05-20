@@ -19,6 +19,7 @@ use crate::outlier::MAJOR;
 use std::fs::File;
 use std::io::{Write};
 use crate::compress::PRECISION_MAP;
+use std::slice::Iter;
 
 pub const SAMPLE:usize = 2000usize;
 pub const OUTLIER_R:f32 = 0.1f32;
@@ -2358,6 +2359,67 @@ impl SplitBDDoubleCompress {
             expected_datapoints.push(f_cur);
         }
 
+
+        // for i in 0..10{
+        //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())
+        // }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+
+    pub fn fixed_decode_condition(&self, bytes: Vec<u8>, cond:Iter<usize>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+         let mut expected_datapoints:Vec<f64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = (dlen+ilen) as usize;
+        let mut iterator = cond.clone();
+        let mut it = iterator.next();
+        let mut dec_cur = 0;
+        let mut dec_pre = 0;
+        let mut dec = 0;
+        let mut delta = 0;
+
+        if it!=None{
+            dec_cur = *it.unwrap();
+            if dec_cur!=0{
+                bitpack.skip(((dec_cur) * remain) as usize);
+            }
+            dec = bitpack.read(remain as usize).unwrap();
+            expected_datapoints.push((base_int + dec as i64 ) as f64 / dec_scl);
+            it = iterator.next();
+            dec_pre = dec_cur;
+        }
+        while it!=None{
+            dec_cur = *it.unwrap();
+            delta = dec_cur-dec_pre;
+            if delta != 1 {
+                bitpack.skip(((delta-1) * remain) as usize);
+            }
+            dec = bitpack.read(remain as usize).unwrap();
+            expected_datapoints.push((base_int + dec as i64 ) as f64 / dec_scl);
+            it = iterator.next();
+            dec_pre=dec_cur;
+        }
 
         // for i in 0..10{
         //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())

@@ -48,6 +48,7 @@ use std::fmt::Debug;
 use ndarray_linalg::{Scalar, Lapack};
 use crate::compress::PRECISION_MAP;
 use self::tsz::{Encode, Decode};
+use std::slice::Iter;
 
 pub const TYPE_LEN:usize = 8usize;
 pub const SCALE: f64 = 1.0f64;
@@ -329,6 +330,26 @@ impl GZipCompress {
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
     }
+
+    pub(crate) fn decode_condition(&self, bytes: Vec<u8>,cond:Iter<usize>) -> Vec<f64> {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        info!("size read:{}, original size:{}", ct, s.len());
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                let vals:Vec<f64> = new_seg.get_data().clone();
+                for &elem in cond{
+                    expected_datapoints.push(*vals.get(elem).unwrap());
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
 
 
     pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
@@ -658,6 +679,35 @@ impl SnappyCompress {
                 for e in new_seg.get_data() as &Vec<f64>
                 {
                     expected_datapoints.push(*e);
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        //println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+    pub(crate) fn decode_condition(&self, bytes: Vec<u8>,cond:Iter<usize>) -> Vec<f64> {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut iter = cond.clone();
+        let mut it =iter.next();
+        let mut point = *it.unwrap();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut i = 0;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if i==point{
+                        expected_datapoints.push(*e);
+                        it =iter.next();
+                        if it==None{
+                            break;
+                        }
+                        point = *it.unwrap();
+                    }
+                    i += 1;
                 }
             },
             _           => panic!("Failed to convert bytes into segment"),

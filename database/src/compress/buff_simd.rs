@@ -20,6 +20,7 @@ use crate::compress::FILE_MIN_MAX;
 use std::iter::FromIterator;
 use myroaring::RoaringBitmap;
 use croaring::Bitmap;
+use std::slice::Iter;
 
 // pub const SIMD_THRESHOLD:f64 = 0.018;
 pub const SIMD_THRESHOLD:f64 = 0.06;
@@ -1269,6 +1270,394 @@ impl SplitBDDoubleCompress {
         }
 
         println!("Number of qualified items:{}", res.cardinality());
+    }
+
+    // decode with pre-set condition
+    pub fn buff_decode_condition(&self, bytes: Vec<u8>, iter: Iter<usize>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap() as usize;
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut cur;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = (dlen+ilen) as usize;
+        let mut bytec = 0;
+        let mut pre = 0;
+        let mut delta = 0;
+
+        if remain<8{
+            let mut it = iter.clone();
+            pre = *it.next().unwrap();
+            bitpack.skip(pre * remain);
+            cur = bitpack.read_bits(remain).unwrap();
+            expected_datapoints.push((base_int + cur as i64 ) as f64 / dec_scl);
+
+            for &entry in it{
+                delta = entry-pre;
+                if delta != 1 {
+                    bitpack.skip((delta-1) * remain);
+                }
+                cur = bitpack.read_bits(remain).unwrap();
+                expected_datapoints.push((base_int + cur as i64 ) as f64 / dec_scl);
+                pre = entry;
+            }
+            remain=0
+        }
+        else {
+            bytec+=1;
+            remain -= 8;
+
+            if remain == 0 {
+
+                let mut it = iter.clone();
+                pre = *it.next().unwrap();
+                bitpack.skip_n_byte(pre);
+                cur = bitpack.read_byte().unwrap();
+                expected_datapoints.push((base_int + cur as i64 ) as f64 / dec_scl);
+
+                for &entry in it{
+                    delta = entry-pre;
+                    if delta != 1 {
+                        bitpack.skip_n_byte((delta-1) );
+                    }
+                    cur = bitpack.read_byte().unwrap();
+                    expected_datapoints.push((base_int + cur as i64 ) as f64 / dec_scl);
+                    pre = entry;
+                }
+                if len - pre>1 {
+                    bitpack.skip_n_byte((len - pre - 1) as usize);
+                }
+            }
+            else{
+                let mut it = iter.clone();
+                pre = *it.next().unwrap();
+                bitpack.skip_n_byte((pre) );
+                cur = bitpack.read_byte().unwrap();
+                fixed_vec.push(((cur) as u64)<<remain);
+
+                for &entry in it{
+                    delta = entry-pre;
+                    if delta != 1 {
+                        bitpack.skip_n_byte((delta-1) );
+                    }
+                    cur = bitpack.read_byte().unwrap();
+                    fixed_vec.push(((cur) as u64)<<remain);
+                    pre = entry;
+                }
+                println!("len:{},pre:{}",len , pre);
+                if len - pre>1 {
+                    bitpack.skip_n_byte(((len - pre - 1) as usize));
+                }
+            }
+            println!("read the {}th byte of dec",bytec);
+
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                if remain == 0 {
+                    let mut fixed_iter = fixed_vec.iter();
+                    let mut it = iter.clone();
+                    pre = *it.next().unwrap();
+                    bitpack.skip_n_byte((pre) as usize);
+                    cur = bitpack.read_byte().unwrap();
+                    expected_datapoints.push((base_int + (cur as u64|*fixed_iter.next().unwrap()) as i64 ) as f64 / dec_scl);
+
+                    for &entry in it{
+                        delta = entry-pre;
+                        if delta != 1 {
+                            bitpack.skip_n_byte((delta-1) as usize);
+                        }
+                        cur = bitpack.read_byte().unwrap();
+                        expected_datapoints.push((base_int + (cur as u64|*fixed_iter.next().unwrap()) as i64 ) as f64 / dec_scl);
+                        pre = entry;
+                    }
+
+                }
+                else{
+                    let mut fixed_iter = fixed_vec.iter_mut();
+                    let mut it = iter.clone();
+                    pre = *it.next().unwrap();
+                    bitpack.skip_n_byte((pre) as usize);
+                    cur = bitpack.read_byte().unwrap();
+                    let mut c_val = fixed_iter.next().unwrap();
+                    *c_val = (*c_val)|(((cur) as u64)<<remain);
+
+                    for &entry in it{
+                        delta = entry-pre;
+                        if delta != 1 {
+                            bitpack.skip_n_byte((delta-1));
+                        }
+                        cur = bitpack.read_byte().unwrap();
+                        c_val = fixed_iter.next().unwrap();
+                        *c_val = (*c_val)|(((cur) as u64)<<remain);
+                        pre = entry;
+                    }
+                    println!("len:{},pre:{}",len , pre);
+                    if len - pre>1 {
+                        bitpack.skip_n_byte((((len - pre - 1) as usize)) );
+                    }
+
+                }
+
+
+                println!("read the {}th byte of dec",bytec);
+            }
+            // let duration = start.elapsed();
+            // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+            // let start5 = Instant::now();
+            if (remain>0){
+                bitpack.finish_read_byte();
+                println!("read remaining {} bits of dec",remain);
+                println!("length for fixed:{}", fixed_vec.len());
+
+                let mut fixed_iter = fixed_vec.iter();
+                let mut it = iter.clone();
+                pre = *it.next().unwrap();
+                bitpack.skip((pre * remain) as usize);
+                cur = bitpack.read_bits(remain as usize).unwrap();
+                expected_datapoints.push((base_int + ((*(fixed_iter.next().unwrap()) as u64)|((cur as u64)<< remain as u64) ) as i64 ) as f64 / dec_scl);
+
+                for &entry in it{
+                    delta = entry-pre;
+                    if delta != 1 {
+                        bitpack.skip(((delta-1) * remain));
+                    }
+                    cur = bitpack.read_bits(remain as usize).unwrap();
+                    expected_datapoints.push((base_int + ((*(fixed_iter.next().unwrap()) as u64)|((cur as u64)<< remain as u64) )as i64 ) as f64 / dec_scl);
+                    pre = entry;
+                }
+
+            }
+        }
+        // for i in 0..10{
+        //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())
+        // }
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
+
+    pub(crate) fn buff_major_decode_condition(&self, bytes: Vec<u8>,iter: Iter<usize>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap() as usize;
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain =(dlen+ilen) as usize;
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut byte_count = 0;
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        // let start = Instant::now();
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut outlier_cols = bitpack.read(8).unwrap();
+        println!("number of outlier cols:{}",outlier_cols);
+
+        // if there are outlier cols, then read outlier cols first
+        if outlier_cols>0{
+            error!("conditional mat for buff major is not implemented yet!")
+        }
+        else{
+            if remain<8{
+                let mut iterator = iter.clone();
+                let mut it = iterator.next();
+                let mut dec_cur = 0;
+
+                let mut dec_pre = 0;
+                let mut dec = 0;
+                let mut delta = 0;
+                if it!=None{
+                    dec_cur = *it.unwrap();
+                    if dec_cur!=0{
+                        bitpack.skip(((dec_cur) * remain) as usize);
+                    }
+                    dec = bitpack.read_bits(remain as usize).unwrap();
+                    expected_datapoints.push((base_int + dec as i64 ) as f64 / dec_scl);
+                    it = iterator.next();
+                    dec_pre = dec_cur;
+                }
+                while it!=None{
+                    dec_cur = *it.unwrap();
+                    delta = dec_cur-dec_pre;
+                    if delta != 1 {
+                        bitpack.skip(((delta-1) * remain) as usize);
+                    }
+                    dec = bitpack.read_bits(remain as usize).unwrap();
+                    expected_datapoints.push((base_int + dec as i64 ) as f64 / dec_scl);
+                    it = iterator.next();
+                    dec_pre=dec_cur;
+                }
+                println!("read the remain {} bits of dec",remain);
+                remain = 0;
+                return expected_datapoints;
+            }else {
+                remain-=8;
+                byte_count+=1;
+                let mut iterator = iter.clone();
+                let mut it = iterator.next();
+                let mut dec_cur = 0;
+                let mut dec_pre = 0;
+                let mut dec = 0;
+                let mut delta = 0;
+
+                if it!=None{
+                    dec_cur = *it.unwrap();
+                    if dec_cur!=0{
+                        bitpack.skip_n_byte((dec_cur) as usize);
+                    }
+                    dec = bitpack.read_byte().unwrap();
+                    // println!("{} first match: {}", dec_cur, dec);
+                    fixed_vec.push(((dec) as u64)<<remain);
+                    it = iterator.next();
+                    dec_pre = dec_cur;
+                }
+                while it!=None{
+                    dec_cur = *it.unwrap();
+                    delta = dec_cur-dec_pre;
+                    if delta != 1 {
+                        bitpack.skip_n_byte((delta-1) as usize);
+                    }
+                    dec = bitpack.read_byte().unwrap();
+                    // if dec_cur<10{
+                    //     println!("{} first match: {}", dec_cur, dec);
+                    // }
+                    fixed_vec.push(((dec) as u64)<<remain);
+                    it = iterator.next();
+                    dec_pre=dec_cur;
+                }
+                if len - dec_pre>1 {
+                    bitpack.skip_n_byte(((len - dec_pre - 1)) as usize);
+                }
+            }
+            // rb1.run_optimize();
+            // let duration = start.elapsed();
+            // println!("Time elapsed in splitBD filtering int part is: {:?}", duration);
+
+            while (remain>0){
+                // if we can read by byte
+                if remain>=8{
+                    remain-=8;
+                    byte_count+=1;
+                    // let start = Instant::now();
+                    let mut iterator = iter.clone();
+                    // check the decimal part
+                    let mut it = iterator.next();
+                    let mut fixed_iter = fixed_vec.iter_mut();
+                    let mut dec_cur = 0;
+                    let mut dec_pre = 0;
+                    let mut dec = 0;
+                    let mut delta = 0;
+                    if it!=None{
+                        dec_cur = *it.unwrap();
+                        if dec_cur!=0{
+                            bitpack.skip_n_byte((dec_cur) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        let mut c_val = fixed_iter.next().unwrap();
+                        *c_val = (*c_val)|(((dec) as u64)<<remain);
+                        // println!("{} first match: {}", dec_cur, dec);
+                        it = iterator.next();
+                        dec_pre = dec_cur;
+                    }
+                    while it!=None{
+                        dec_cur = *it.unwrap();
+                        delta = dec_cur-dec_pre;
+                        if delta != 1 {
+                            bitpack.skip_n_byte((delta-1) as usize);
+                        }
+                        dec = bitpack.read_byte().unwrap();
+                        // if dec_cur<10{
+                        //     println!("{} first match: {}", dec_cur, dec);
+                        // }
+                        let mut c_val = fixed_iter.next().unwrap();
+                        *c_val = (*c_val)|(((dec) as u64)<<remain);
+
+                        it = iterator.next();
+                        dec_pre=dec_cur;
+                    }
+                    if len - dec_pre>1 {
+                        bitpack.skip_n_byte(((len - dec_pre - 1)) as usize);
+                    }
+                    // println!("read the {}th byte of dec",byte_count);
+                    // println!("Number of qualified items in bitmap:{}", rb1.cardinality());
+                }
+                // else we have to read by bits
+                else {
+                    bitpack.finish_read_byte();
+                    // let start = Instant::now();
+                    let mut iterator = iter.clone();
+                    // check the decimal part
+                    let mut it = iterator.next();
+                    let mut fixed_iter = fixed_vec.iter_mut();
+                    let mut dec_cur = 0;
+
+                    let mut dec_pre = 0;
+                    let mut dec = 0;
+                    let mut delta = 0;
+                    if it!=None{
+                        dec_cur = *it.unwrap();
+                        if dec_cur!=0{
+                            bitpack.skip(((dec_cur) * remain) as usize);
+                        }
+                        dec = bitpack.read_bits(remain as usize).unwrap();
+                        let mut c_val = fixed_iter.next().unwrap();
+                        *c_val = (*c_val)|(((dec) as u64));
+                        it = iterator.next();
+                        dec_pre = dec_cur;
+                    }
+                    while it!=None{
+                        dec_cur = *it.unwrap();
+                        delta = dec_cur-dec_pre;
+                        if delta != 1 {
+                            bitpack.skip(((delta-1) * remain) as usize);
+                        }
+                        dec = bitpack.read_bits(remain as usize).unwrap();
+                        let mut c_val = fixed_iter.next().unwrap();
+                        *c_val = (*c_val)|(((dec) as u64));
+                        it = iterator.next();
+                        dec_pre=dec_cur;
+                    }
+                    println!("read the remain {} bits of dec",remain);
+                    remain = 0;
+                }
+            }
+        }
+        expected_datapoints = fixed_vec.iter().map(|&x| (base_int + x as i64) as f64/dec_scl).collect();
+        expected_datapoints
+
     }
 
     pub(crate) fn buff_equal_filter_majority(&self, bytes: Vec<u8>, pred:f64) {

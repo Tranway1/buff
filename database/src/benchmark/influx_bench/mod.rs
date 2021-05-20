@@ -1,13 +1,13 @@
-use crate::benchmark::{BENCH_DATA, read_a_file};
+use crate::benchmark::{BENCH_DATA, read_a_file, get_comp_file};
 use std::time::Instant;
 use crate::compress::sprintz::SprintzDoubleCompress;
 use crate::compress::split_double::SplitBDDoubleCompress;
 use crate::methods::compress::{GZipCompress, SnappyCompress};
 use crate::compress::gorilla::{GorillaCompress, GorillaBDCompress};
-use crate::benchmark::tsbs::get_file;
+
 
 pub fn influx_bench(compression: &str, query: &str){
-    let comp_max = get_file("acr_temperature.csv",compression);
+    let comp_max = get_comp_file("acr_temperature.csv",compression);
     let scl = 10000;
     let window = 240*7;
     let start = 500*window;
