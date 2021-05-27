@@ -49,6 +49,7 @@ use ndarray_linalg::{Scalar, Lapack};
 use crate::compress::PRECISION_MAP;
 use self::tsz::{Encode, Decode};
 use std::slice::Iter;
+use my_bit_vec::BitVec;
 
 pub const TYPE_LEN:usize = 8usize;
 pub const SCALE: f64 = 1.0f64;
@@ -351,6 +352,28 @@ impl GZipCompress {
     }
 
 
+    pub(crate) fn range_filter_condition(&self, bytes: Vec<u8>, pred:f64, iter: Iter<usize>, len:usize) -> BitVec<u32> {
+        let mut gz = GzDecoder::new(&bytes[..]);
+        let mut s:Vec<u8> = Vec::new();
+        let ct= gz.read_to_end(&mut s).unwrap();
+        let mut res = BitVec::from_elem(len, false);
+        info!("size read:{}, original size:{}", ct, s.len());
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                let vals:Vec<f64> = new_seg.get_data().clone();
+                for &elem in iter{
+                    if *vals.get(elem).unwrap()>pred{
+                        res.set(elem,true);
+                    }
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
+    }
+
+
 
     pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
         let mut gz = GzDecoder::new(&bytes[..]);
@@ -483,8 +506,8 @@ impl GZipCompress {
             _           => panic!("Failed to convert bytes into segment"),
         }
         max_vec.push(max);
-        println!("Max: {:?}",max_vec);
-        println!("Number of qualified items for max_groupby:{}", res.cardinality());
+        println!("Max: {}",max_vec.len());
+        // println!("Number of qualified items for max_groupby:{}", res.cardinality());
     }
 }
 
@@ -716,6 +739,36 @@ impl SnappyCompress {
         expected_datapoints
     }
 
+    pub(crate) fn range_filter_condition(&self, bytes: Vec<u8>, pred:f64, mut iter: Iter<usize>, len:usize) -> BitVec<u32> {
+        let mut snappy = decompress(bytes.as_slice());
+        let mut s = snappy.unwrap();
+        let mut it =iter.next();
+        let mut point = *it.unwrap();
+        let mut res = BitVec::from_elem(len, false);
+        let mut i = 0;
+        match Segment::convert_from_bytes(&s) {
+            Ok(new_seg) => {
+                for e in new_seg.get_data() as &Vec<f64>
+                {
+                    if i==point{
+                        if *e>pred{
+                            res.set(i,true);
+                        }
+                        it =iter.next();
+                        if it==None{
+                            break;
+                        }
+                        point = *it.unwrap();
+                    }
+                    i += 1;
+                }
+            },
+            _           => panic!("Failed to convert bytes into segment"),
+        }
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
+    }
+
     pub(crate) fn sum(&self, bytes: Vec<u8>) -> f64 {
         let mut snappy = decompress(bytes.as_slice());
         let mut s = snappy.unwrap();
@@ -845,8 +898,8 @@ impl SnappyCompress {
         }
         // res.run_optimize();
         max_vec.push(max);
-        println!("Max: {:?}",max_vec);
-        println!("Number of qualified items for max_groupby:{}", res.cardinality());
+        println!("Max: {}",max_vec.len());
+        // println!("Number of qualified items for max_groupby:{}", res.cardinality());
     }
 }
 

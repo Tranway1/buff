@@ -63,7 +63,10 @@ lazy_static! {
         ("/home/cc/float_comp/signal/Stocks-c1-open.csv", (0i64,245760000i64)),
         ("/home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv", (-4317773i64,15728640i64)),
         ("/home/cc/float_comp/signal/gas-array-all-c2-Humidity.txt", (4183i64, 21455i64)),
-        ("/home/cc/float_comp/signal/city_temperature_c8.csv", (-3168i64,3520i64))]
+        ("/home/cc/float_comp/signal/city_temperature_c8.csv", (-3168i64,3520i64)),
+        ("/home/cc/float_comp/signal/Household_power_consumption_c3_voltage.csv", (57139i64,65062i64)),
+        ("/home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv", (6i64,1548i64))]
+
         .iter().cloned().collect();
 }
 

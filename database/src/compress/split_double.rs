@@ -20,6 +20,7 @@ use std::fs::File;
 use std::io::{Write};
 use crate::compress::PRECISION_MAP;
 use std::slice::Iter;
+use my_bit_vec::BitVec;
 
 pub const SAMPLE:usize = 2000usize;
 pub const OUTLIER_R:f32 = 0.1f32;
@@ -5637,6 +5638,71 @@ impl SplitBDDoubleCompress {
     }
 
 
+    pub(crate) fn fixed_range_filter_condition(&self, bytes: Vec<u8>, pred:f64, mut iter: Iter<usize>) -> BitVec<u32> {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain = (dlen+ilen) as usize;
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+        let mut res = BitVec::from_elem(len as usize, false);
+        let target = pred;
+        let fixed_part = bound.fetch_fixed_aligned(target);
+        if fixed_part<base_int as i64{
+            println!("Number of qualified items:{}", len);
+            return res;
+        }
+        let fixed_target = (fixed_part-base_int as i64) as u64;
+        let mut cur_tar = fixed_target as u32;
+
+        let mut it = iter.next();
+        let mut dec_cur = 0;
+        let mut dec_pre = 0;
+        let mut dec = 0;
+        let mut delta = 0;
+
+        if it!=None{
+            dec_cur = *it.unwrap();
+            if dec_cur!=0{
+                bitpack.skip((dec_cur * remain) as usize);
+            }
+            dec = bitpack.read(remain ).unwrap();
+            if dec>cur_tar{
+                res.set(dec_cur , true);
+            }
+            it = iter.next();
+            dec_pre = dec_cur;
+        }
+        while it!=None{
+            dec_cur = *it.unwrap();
+            delta = dec_cur-dec_pre;
+            if delta != 1 {
+                bitpack.skip(((delta-1) * remain) );
+            }
+            dec = bitpack.read(remain ).unwrap();
+            if dec>cur_tar{
+                res.set(dec_cur , true);
+            }
+            it = iter.next();
+            dec_pre=dec_cur;
+        }
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
+    }
+
+
     pub(crate) fn byte_residue_range_filter_majority(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -8021,8 +8087,8 @@ impl SplitBDDoubleCompress {
         assert_eq!((cur_s-s)/window+1, (e-s)/window);
         max_vec.push(fixed_max);
         let max_vec_f64 : Vec<f64> = max_vec.iter().map(|&x| (x as i64 +base_int) as f64 / 2.0f64.powi(dlen as i32)).collect();
-        println!("Number of qualified max_groupby items:{}", res.cardinality());
-        println!("Max value:{:?}", max_vec_f64);
+        // println!("Number of qualified max_groupby items:{}", res.cardinality());
+        println!("Max: {}",max_vec_f64.len());
     }
 
     pub(crate) fn byte_residue_max_majority(&self, bytes: Vec<u8>) {

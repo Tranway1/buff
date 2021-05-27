@@ -11,12 +11,20 @@ use serde::{Deserialize, Serialize};
 use tsz::stream::BufferedWriter;
 use itertools::Itertools;
 use crate::compress::PRECISION_MAP;
-use std::arch::x86_64::{__m256i, _mm256_set1_epi8, _mm256_lddqu_si256, _mm256_cmpeq_epi8, _mm256_movemask_epi8, _mm256_cmpgt_epi8, _mm256_and_si256, _mm256_or_si256, _mm256_testz_si256};
+use std::arch::x86_64::{__m256i, _mm256_set1_epi8, _mm256_lddqu_si256, _mm256_cmpeq_epi8, _mm256_movemask_epi8, _mm256_cmpgt_epi8, _mm256_and_si256, _mm256_or_si256, _mm256_testz_si256, _mm256_set1_epi64x, _mm256_setr_epi64x, _mm256_set1_epi32, _mm256_shuffle_epi8};
 use std::ptr::eq;
 use my_bit_vec::BitVec;
 use std::slice::Iter;
+use parquet::basic::Type::BYTE_ARRAY;
 
 pub const BYTE_WORD:u32 = 32u32;
+pub const REVERSE_i64:i64 = -9205322385119247871i64;
+pub const SF0:i64 = 0b0000000000000000000000000000000000000000000000000000000000000000;
+pub const SF1:i64 = 0b0000000100000001000000010000000100000001000000010000000100000001;
+pub const SF2:i64 = 0b0000001000000010000000100000001000000010000000100000001000000010;
+pub const SF3:i64 = 0b0000001100000011000000110000001100000011000000110000001100000011;
+// pub const SHUFFLE_MASK: __m256i = unsafe { _mm256_setr_epi64x(SF0,SF1,SF2,SF3) };
+// pub const INVERSE_MASK: __m256i = unsafe { _mm256_set1_epi64x(REVERSE_i64) };
 
 pub fn run_buff_slice_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
@@ -110,13 +118,27 @@ pub fn avx_iszero(a: __m256i)-> bool{
 
 
 
-// set simd i8 word with u8 input
+/// by Chunwei
+/// set simd i8 word with u8 input
 pub fn set_pred_word(pred:u8) -> __m256i{
     let predicate = unsafe { mem::transmute::<u8, i8>(pred) };
     println!("current predicate:{}",pred);
     let pred_word = unsafe { _mm256_set1_epi8(predicate) };
     pred_word
 }
+
+/// by Chunwei
+pub fn inverse_movemask(input:u32,shuffle_mask:__m256i,inverse_mask: __m256i) -> __m256i{
+    let val = unsafe { mem::transmute::<u32, i32>(input) };
+    // println!("current predicate:{}",val);
+    let input_simd = unsafe { _mm256_set1_epi32(val) };
+    let input_shuflle= unsafe{ _mm256_shuffle_epi8(input_simd, shuffle_mask) };
+    let simd_and = unsafe { _mm256_and_si256(input_shuflle, inverse_mask) };
+    let greater = unsafe { _mm256_cmpeq_epi8(inverse_mask, simd_and) };
+    greater
+}
+
+
 
 
 
@@ -619,6 +641,230 @@ impl BuffSliceCompress {
     }
 
 
+    pub(crate) fn buff_slice_range_filter_condition(&self, bytes: Vec<u8>, pred:f64, cond:Iter<usize>) -> BitVec<u32> {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain = dlen+ilen;
+        let num_slice = ceil(remain, 8);
+        let mut data = Vec::new();
+        let mut target_byte = Vec::new();
+        let mut target_word = Vec::new();
+        let mut slice_ptr = Vec::new();
+
+        let mut condition = BitVec::from_elem(len as usize, false);
+        for &elem in cond{
+            condition.set(elem,true);
+        }
+
+
+        bound.set_length(ilen as u64, dlen as u64);
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut resv = Vec::new();
+        let target = pred;
+        let fixed_part = bound.fetch_fixed_aligned(target);
+
+        if fixed_part<base_int{
+            println!("Number of qualified items:{}", len);
+            return res;
+        }
+        let fixed_target = (fixed_part-base_int) as u64;
+        println!("fixed target:{}", fixed_target);
+        for cnt in 0..num_slice{
+            let chunk = bitpack.read_n_byte_unmut((cnt*len) as usize, len as usize).unwrap();
+            slice_ptr.push(chunk.as_ptr());
+            data.push(chunk);
+            let mut pred_u8= 0;
+            if (remain-8*cnt>=8){
+                pred_u8 =flip((fixed_target >> (remain - 8 * (1 + cnt))) as u8);
+            }
+            else {
+                let pad = 8*(1+cnt)-remain;
+                pred_u8= flip((fixed_target << pad) as u8);
+            }
+            target_byte.push(pred_u8);
+            target_word.push(set_pred_word(pred_u8));
+
+        }
+
+        let mut i = 0;
+        let mut bv_elem = 0;
+        let mut gt_mask = 0;
+        let shuffle_mask: __m256i = unsafe { _mm256_setr_epi64x(SF0,SF1,SF2,SF3) };
+        let inverse_mask: __m256i = unsafe { _mm256_set1_epi64x(REVERSE_i64) };
+
+        unsafe {
+            while i <= len - BYTE_WORD {
+                bv_elem = condition.get_entry((i / BYTE_WORD) as usize);
+                if (bv_elem!=0){
+                    let mut equal =inverse_movemask(bv_elem,shuffle_mask, inverse_mask);
+
+                    let mut word = _mm256_lddqu_si256(slice_ptr.get(0).unwrap().add(i as usize) as *const __m256i);
+                    let mut greater = _mm256_and_si256(equal, _mm256_cmpgt_epi8(word, *target_word.get(0).unwrap()));
+                    equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word, *target_word.get(0).unwrap()));
+
+                    if num_slice > 1 && !avx_iszero(equal){
+                        let word1 = _mm256_lddqu_si256(slice_ptr.get(1).unwrap().add(i as usize) as *const __m256i);
+                        // previous equal and current greater, then append (or) to previous greater
+                        greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8(word1, *target_word.get(1).unwrap())));
+                        // current equal and with previous equal
+                        equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word1, *target_word.get(1).unwrap()));
+
+                        if num_slice > 2 && !avx_iszero(equal){
+                            let word2 = _mm256_lddqu_si256(slice_ptr.get(2).unwrap().add(i as usize) as *const __m256i);
+                            // previous equal and current greater, then append (or) to previous greater
+                            greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8(word2, *target_word.get(2).unwrap())));
+                            // current equal and with previous equal
+                            equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word2, *target_word.get(2).unwrap()));
+
+                            if num_slice > 3 && !avx_iszero(equal){
+                                let word3 = _mm256_lddqu_si256(slice_ptr.get(3).unwrap().add(i as usize) as *const __m256i);
+                                // previous equal and current greater, then append (or) to previous greater
+                                greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8(word3, *target_word.get(3).unwrap())));
+                                // current equal and with previous equal
+                                equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word3, *target_word.get(3).unwrap()));
+                            }
+                        }
+                    }
+                    gt_mask = _mm256_movemask_epi8(greater);
+                    resv.push(mem::transmute::<i32, u32>(gt_mask));
+                }
+                else {
+                    resv.push(0);
+                }
+                i += BYTE_WORD;
+            }
+        }
+        res.set_storage(&resv);
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
+    }
+
+
+    pub(crate) fn buff_slice_range_smaller_filter_condition(&self, bytes: Vec<u8>, pred:f64, cond:Iter<usize>) -> BitVec<u32> {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        let mut remain = dlen+ilen;
+        let num_slice = ceil(remain, 8);
+        let mut data = Vec::new();
+        let mut target_byte = Vec::new();
+        let mut target_word = Vec::new();
+        let mut slice_ptr = Vec::new();
+
+        let mut condition = BitVec::from_elem(len as usize, false);
+        for &elem in cond{
+            condition.set(elem,true);
+        }
+
+
+        bound.set_length(ilen as u64, dlen as u64);
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut resv = Vec::new();
+        let target = pred;
+        let fixed_part = bound.fetch_fixed_aligned(target);
+
+        if fixed_part<base_int{
+            println!("Number of qualified items:{}", len);
+            return res;
+        }
+        let fixed_target = (fixed_part-base_int) as u64;
+        println!("fixed target:{}", fixed_target);
+        for cnt in 0..num_slice{
+            let chunk = bitpack.read_n_byte_unmut((cnt*len) as usize, len as usize).unwrap();
+            slice_ptr.push(chunk.as_ptr());
+            data.push(chunk);
+            let mut pred_u8= 0;
+            if (remain-8*cnt>=8){
+                pred_u8 =flip((fixed_target >> (remain - 8 * (1 + cnt))) as u8);
+            }
+            else {
+                let pad = 8*(1+cnt)-remain;
+                pred_u8= flip((fixed_target << pad) as u8);
+            }
+            target_byte.push(pred_u8);
+            target_word.push(set_pred_word(pred_u8));
+
+        }
+
+        let mut i = 0;
+        let mut bv_elem = 0;
+        let mut gt_mask = 0;
+        let shuffle_mask: __m256i = unsafe { _mm256_setr_epi64x(SF0,SF1,SF2,SF3) };
+        let inverse_mask: __m256i = unsafe { _mm256_set1_epi64x(REVERSE_i64) };
+
+        unsafe {
+            while i <= len - BYTE_WORD {
+                bv_elem = condition.get_entry((i / BYTE_WORD) as usize);
+                if (bv_elem!=0){
+                    let mut equal =inverse_movemask(bv_elem,shuffle_mask, inverse_mask);
+
+                    let mut word = _mm256_lddqu_si256(slice_ptr.get(0).unwrap().add(i as usize) as *const __m256i);
+                    let mut greater = _mm256_and_si256(equal, _mm256_cmpgt_epi8( *target_word.get(0).unwrap(),word));
+                    equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word, *target_word.get(0).unwrap()));
+
+                    if num_slice > 1 && !avx_iszero(equal){
+                        let word1 = _mm256_lddqu_si256(slice_ptr.get(1).unwrap().add(i as usize) as *const __m256i);
+                        // previous equal and current greater, then append (or) to previous greater
+                        greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8( *target_word.get(1).unwrap(),word1)));
+                        // current equal and with previous equal
+                        equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word1, *target_word.get(1).unwrap()));
+
+                        if num_slice > 2 && !avx_iszero(equal){
+                            let word2 = _mm256_lddqu_si256(slice_ptr.get(2).unwrap().add(i as usize) as *const __m256i);
+                            // previous equal and current greater, then append (or) to previous greater
+                            greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8(*target_word.get(2).unwrap(),word2)));
+                            // current equal and with previous equal
+                            equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word2, *target_word.get(2).unwrap()));
+
+                            if num_slice > 3 && !avx_iszero(equal){
+                                let word3 = _mm256_lddqu_si256(slice_ptr.get(3).unwrap().add(i as usize) as *const __m256i);
+                                // previous equal and current greater, then append (or) to previous greater
+                                greater =_mm256_or_si256( greater,_mm256_and_si256(equal,_mm256_cmpgt_epi8( *target_word.get(3).unwrap(),word3)));
+                                // current equal and with previous equal
+                                equal = _mm256_and_si256(equal,_mm256_cmpeq_epi8(word3, *target_word.get(3).unwrap()));
+                            }
+                        }
+                    }
+                    gt_mask = _mm256_movemask_epi8(greater);
+                    resv.push(mem::transmute::<i32, u32>(gt_mask));
+                }
+                else {
+                    resv.push(0);
+                }
+                i += BYTE_WORD;
+            }
+        }
+        res.set_storage(&resv);
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
+    }
+
+
     pub(crate) fn buff_slice_equal_filter(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -963,4 +1209,13 @@ fn test_ceil(){
 
     let avx1 = set_pred_word(1);
     assert!(!avx_iszero(avx1));
+
+    let test = 4096u32;
+    let shuffle_mask: __m256i = unsafe { _mm256_setr_epi64x(SF0,SF1,SF2,SF3) };
+    let inverse_mask: __m256i = unsafe { _mm256_set1_epi64x(REVERSE_i64) };
+
+    let expand = inverse_movemask(test,shuffle_mask, inverse_mask);
+    println!("{:?}",expand);
+    assert_eq!(unsafe { mem::transmute::<u32, i32>(test) }, unsafe { _mm256_movemask_epi8(expand) })
+
 }

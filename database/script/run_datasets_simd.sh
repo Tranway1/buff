@@ -88,4 +88,18 @@ bash script/float_compress_simd.sh /home/cc/float_comp/signal/pmu_p1_L1MAG 10000
 mv performance.csv pmu_p1_L1MAG-performance-freq.csv
 rm new.out
 
+
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c3_voltage.csv 100 230.71 5 >> new.out
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c3_voltage.csv 100 241.84 5 >> new.out
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c3_voltage.csv 100 249.91 5 >> new.out
+mv performance.csv house-voltage-simd-performance.csv
+rm new.out
+
+
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv 10 0.8 5 >> new.out
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv 10 1.6 5 >> new.out
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv 10 40.4 5 >> new.out
+mv performance.csv house-intensity-simd-performance.csv
+rm new.out
+
 echo "done"

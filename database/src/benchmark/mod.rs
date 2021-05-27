@@ -127,14 +127,14 @@ pub fn get_csv_file(f:&str) ->Vec<usize>
 #[test]
 fn test_compresse_bench_data(){
     let mut encodings: [&str; 9] = ["buff", "buff-major","gorilla","gorillabd","snappy","gzip","fixed","sprintz","buff-slice"];
-    let mut files: [&str; 2] =["r_latitude.csv", "r_longitude.csv"];
-    let scl = 100000;
+    let mut files: [&str; 1] =["dt_cur_load.csv"];
+    let scl = 10000;
     let mut outfile = BENCH_DATA.clone().to_owned();
     for &f in files.iter(){
         for &enc in &encodings {
             outfile = BENCH_DATA.clone().to_owned();
             outfile.push_str(f);
-            println!("compressing : {},{}", outfile, enc);
+            println!("compressing : {}.{}", outfile, enc);
             prepare_benchmark_data(&outfile,enc,scl);
         }
     }

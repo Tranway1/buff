@@ -34,7 +34,7 @@ with open(infile) as f:
         x.extend(lst[skip:])
 
 print(min(x),max(x))
-matplotlib.rcParams.update({'font.size': 20})
+matplotlib.rcParams.update({'font.size': 35})
 # the histogram of the data
 n, bins, patches = plt.hist(x, bins=100, weights=np.zeros_like(x) + 1. / len(x), facecolor='g', alpha=0.75)
 

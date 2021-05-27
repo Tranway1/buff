@@ -6,6 +6,7 @@ use croaring::Bitmap;
 use std::time::Instant;
 use crate::methods::compress::CompressionMethod;
 use std::slice::Iter;
+use my_bit_vec::BitVec;
 
 #[derive(Clone)]
 pub struct SprintzDoubleCompress {
@@ -216,8 +217,8 @@ impl SprintzDoubleCompress {
 
         let max_vec_f64 : Vec<f64> = max_vec.iter().map(|&x| x as f64/scl).collect();
 
-        println!("Max: {:?}",max_vec_f64);
-        println!("Number of qualified items for max_groupby:{}", res.cardinality());
+        println!("Max: {}",max_vec_f64.len());
+        // println!("Number of qualified items for max_groupby:{}", res.cardinality());
     }
 
 
@@ -252,6 +253,46 @@ impl SprintzDoubleCompress {
         }
         // res.run_optimize();
         println!("Number of qualified items:{}", res.cardinality());
+    }
+
+    pub fn range_filter_condition(&self, bytes: Vec<u8>, pred:f64, mut iter: Iter<usize>) -> BitVec<u32> {
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let ubase_int = bitpack.read(32).unwrap();
+        let base_int = unsafe { mem::transmute::<u32, i32>(ubase_int) };
+        println!("base int:{}",base_int);
+        let len = bitpack.read(32).unwrap() as usize;
+        println!("total vector size:{}",len);
+        let mut res = BitVec::from_elem(len as usize, false);
+        let ilen = bitpack.read(8).unwrap();
+        let target = pred;
+        let adjust_target = (target*self.scale as f64).ceil() as i32;
+        // check integer part and update bitmap;
+        let mut it = iter.next();
+        let mut point = *it.unwrap();
+        let mut cur;
+        let mut pre = base_int;
+        let mut delta = 0i32;
+        let mut cur_int = 0i32;
+        for i in 0..len {
+            cur = bitpack.read(ilen as usize).unwrap();
+            delta = unzigzag(cur);
+            cur_int = pre+delta;
+            if i==point{
+                if cur_int>adjust_target{
+                    res.set(i,true);
+                }
+                it = iter.next();
+                if it==None{
+                    break;
+                }
+                point = *it.unwrap();
+            }
+
+            pre = cur_int;
+        }
+        // res.run_optimize();
+        println!("Number of qualified items:{}", res.cardinality());
+        return res;
     }
 
     pub fn equal_filter(&self, bytes: Vec<u8>,pred:f64) {
