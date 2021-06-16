@@ -9,6 +9,8 @@ use crate::segment::Segment;
 use crate::compress::sprintz::SprintzDoubleCompress;
 use crate::compress::split_double::SplitBDDoubleCompress;
 use crate::compress::buff_slice::BuffSliceCompress;
+use crate::compress::scaled_slice::ScaledSliceCompress;
+use crate::compress::FILE_MIN_MAX;
 
 pub mod influx_bench;
 pub mod tsbs;
@@ -50,7 +52,14 @@ fn prepare_benchmark_data(file:&str, comp:&str, scl:usize){
         "buff" => {
             outfile.push_str(".buff");
             let comp = SplitBDDoubleCompress::new(10,10,scl);
-            compressed = comp.byte_fixed_encode(&mut seg);
+            if FILE_MIN_MAX.contains_key(file){
+                let (min,max ) = *(FILE_MIN_MAX.get(file).unwrap());
+                compressed = comp.single_pass_byte_fixed_encode(&mut seg,min,max);
+            }
+            else {
+                println!("no min/max");
+                compressed = comp.byte_fixed_encode(&mut seg);
+            }
         },
         "buff-major" => {
             outfile.push_str(".buff-major");
@@ -95,12 +104,19 @@ fn prepare_benchmark_data(file:&str, comp:&str, scl:usize){
             let comp = BuffSliceCompress::new(10,10,scl);
             compressed= comp.buff_slice_encode(&mut seg);
         },
+
+        "scaled-slice" => {
+            outfile.push_str(".scaled-slice");
+            let comp = ScaledSliceCompress::new(10,10,scl);
+            compressed= comp.scaled_slice_encode(&mut seg);
+        },
+
         _ => {panic!("Compression not supported yet.")}
     }
     let duration = start.elapsed();
-    write_file(&outfile, &compressed);
+    // write_file(&outfile, &compressed);
     let comp_size = compressed.len();
-    println!("\ncompression profiling:{:?},{},{},{}",file,len,comp_size as f64/ org_size as f64,1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0);
+    println!("\ncompression profiling:{:?},{:?},{},{},{}",file,comp, len,comp_size as f64/ org_size as f64,1000000000.0 * org_size as f64 / duration.as_nanos() as f64 / 1024.0/1024.0);
 
 }
 
@@ -110,6 +126,7 @@ pub fn get_comp_file(file:&str, compression: &str) ->Vec<u8>
     path.push_str(file);
     path.push_str(".");
     path.push_str(compression);
+    println!("get comp file:{}", path);
     let binary = read_a_file(&path).unwrap();
     binary
 }
@@ -118,7 +135,7 @@ pub fn get_csv_file(f:&str) ->Vec<usize>
 {
     let mut file = BENCH_DATA.to_owned();
     file.push_str(f);
-
+    println!("get csv file:{}", file);
     let file_iter = construct_file_iterator_skip_newline::<usize>(&file, 0, ',');
     let file_vec: Vec<usize> = file_iter.unwrap().collect();
     file_vec
@@ -126,8 +143,8 @@ pub fn get_csv_file(f:&str) ->Vec<usize>
 
 #[test]
 fn test_compresse_bench_data(){
-    let mut encodings: [&str; 9] = ["buff", "buff-major","gorilla","gorillabd","snappy","gzip","fixed","sprintz","buff-slice"];
-    let mut files: [&str; 1] =["dt_cur_load.csv"];
+    let mut encodings: [&str; 10] = ["buff", "buff-major","gorilla","gorillabd","snappy","gzip","fixed","sprintz","buff-slice","scaled-slice"];
+    let mut files: [&str; 1] =["acr_temperature.csv"];
     let scl = 10000;
     let mut outfile = BENCH_DATA.clone().to_owned();
     for &f in files.iter(){

@@ -65,7 +65,13 @@ lazy_static! {
         ("/home/cc/float_comp/signal/gas-array-all-c2-Humidity.txt", (4183i64, 21455i64)),
         ("/home/cc/float_comp/signal/city_temperature_c8.csv", (-3168i64,3520i64)),
         ("/home/cc/float_comp/signal/Household_power_consumption_c3_voltage.csv", (57139i64,65062i64)),
-        ("/home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv", (6i64,1548i64))]
+        ("/home/cc/float_comp/signal/Household_power_consumption_c4_global_intensity.csv", (6i64,1548i64)),
+        ("/home/cc/float_comp/benchmark/dt_cur_load.csv", (0i64,6825i64)),
+        ("/home/cc/float_comp/benchmark/d_fuel_state.csv", (0i64,32i64)),
+        ("/home/cc/float_comp/benchmark/r_longitude.csv", (-131931i64,47185920i64)),
+        ("/home/cc/float_comp/benchmark/r_latitude.csv", (-227399i64,23592960i64)),
+        ("/home/cc/float_comp/benchmark/acr_temperature.csv", (491520i64,917504i64))
+        ]
 
         .iter().cloned().collect();
 }

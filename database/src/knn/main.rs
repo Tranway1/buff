@@ -2,10 +2,11 @@ use tsz::stream::BufferedReader;
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
-use time_series_start::knn::{paa_file, classify, paa_buff_file, fft_file, grail_file, get_gamma};
+use time_series_start::knn::{paa_file, classify, paa_buff_file, fft_file, grail_file, get_gamma, slurp_file};
 use std::env;
 use log::{ info};
 use std::borrow::Borrow;
+use std::time::Instant;
 
 fn main() {
 
@@ -17,16 +18,16 @@ fn main() {
     let test_set = &args[2];
     let precision = args[3].parse::<f64>().unwrap();
     let window = 1;
-    let train_name = train_set.split('/').last().unwrap();
-    let root: &str = "../ucr_dict/";
-    let gm=get_gamma(&Path::new("../database/script/data/gamma_ucr_new.csv"));
-    if !(gm.contains_key(train_name)){
-        return;
-    }
-    let gamma= *gm.get(train_name).unwrap() as usize;
+    // let train_name = train_set.split('/').last().unwrap();
+    // let root: &str = "../ucr_dict/";
+    // let gm=get_gamma(&Path::new("../database/script/data/gamma_ucr_new.csv"));
+    // if !(gm.contains_key(train_name)){
+    //     return;
+    // }
+    // let gamma= *gm.get(train_name).unwrap() as usize;
     // println!("dataset: {} with gamma: {}",train_name,gamma);
 
-    let dict_file = format!("{}{}", root, train_name);
+    // let dict_file = format!("{}{}", root, train_name);
     // println!("dict file: {} ",dict_file);
 
 
@@ -38,8 +39,14 @@ fn main() {
     // let training_set = fft_file(&Path::new(train_set),precision);
     // let validation_sample = fft_file(&Path::new(test_set),precision);
 
-    let training_set = grail_file(&Path::new(train_set),&Path::new(&dict_file), gamma,usize::max_value());
-    let validation_sample = grail_file(&Path::new(test_set),&Path::new(&dict_file),gamma,usize::max_value());
+    let training_set = slurp_file(&Path::new(train_set),precision as i32);
+    let validation_sample = slurp_file(&Path::new(test_set),precision as i32);
+
+
+    // let training_set = grail_file(&Path::new(train_set),&Path::new(&dict_file), gamma,usize::max_value());
+    // let validation_sample = grail_file(&Path::new(test_set),&Path::new(&dict_file),gamma,usize::max_value());
+
+    let start = Instant::now();
 
     let num_correct = validation_sample.iter()
         .filter(|x| {
@@ -47,6 +54,10 @@ fn main() {
             classify(training_set.as_slice(), x.pixels.as_slice()) == x.label
         })
         .count();
+
+    let duration2 = start.elapsed();
+    println!("Time elapsed in knn is: {:?}", duration2.as_millis());
+
 
     println!("{},{},{},Percentage correct,{}",train_set,precision,window,
              num_correct as f64 / validation_sample.len() as f64 );

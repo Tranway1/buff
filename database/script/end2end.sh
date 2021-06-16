@@ -4,7 +4,7 @@ BENCH=influx
 
 for query in max max_groupby;
 		do
-			for comp in gorilla gorillabd snappy gzip fixed sprintz buff-slice buff buff-major;
+			for comp in gorilla gorillabd snappy gzip fixed sprintz scaled-slice buff-slice buff buff-major;
 			    do
 			      for i in $(seq 1 $TIME);
       		    do
@@ -17,9 +17,9 @@ done
 
 BENCH=tsbs
 
-for query in project single range;
+for query in project single range range-new;
 		do
-			for comp in gorilla gorillabd snappy gzip fixed sprintz buff-slice buff buff-major;
+			for comp in gorilla gorillabd snappy gzip fixed sprintz scaled-slice buff-slice buff buff-major;
 			    do
 			      for i in $(seq 1 $TIME);
       		    do

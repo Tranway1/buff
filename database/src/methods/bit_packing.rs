@@ -680,6 +680,7 @@ pub(crate) fn sprintz_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
     bitpack_vec.write(delta_vec.len() as u32, 32);
     bitpack_vec.write(num_bits as u32, 8);
     let mut i =0 ;
+    let start = Instant::now();
     for &b in delta_vec.as_slice() {
         // if i<10{
         //     println!("{}th value: {}",i,b);
@@ -689,6 +690,9 @@ pub(crate) fn sprintz_double_encoder<'a, T>(mydata: &[T], scl:usize) -> Vec<u8>
 
     }
     let vec = bitpack_vec.into_vec();
+    let duration2 = start.elapsed();
+    println!("Time elapsed in writing double function() is: {:?}", duration2);
+
     info!("Length of compressed data: {}", vec.len());
     let ratio= vec.len() as f32 / (mydata.len() as f32*mem::size_of::<T>() as f32);
     print!("{}",ratio);

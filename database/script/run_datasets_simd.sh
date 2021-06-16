@@ -10,8 +10,8 @@ bash script/float_compress_simd.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-f
 mv performance.csv dropoff_latitude-simd-performance.csv
 rm new.out
 
-bash script/float_compress_simd.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 294.5538 5 >> new.out
 bash script/float_compress_simd.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 295.7114 5 >> new.out
+bash script/float_compress_simd.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 294.5538 5 >> new.out
 bash script/float_compress_simd.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 296.0503 5 >> new.out
 mv performance.csv ts120rpm-c8-simd-performance.csv
 rm new.out

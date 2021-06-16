@@ -10,6 +10,7 @@ use crate::compress::gorilla::{GorillaCompress, GorillaBDCompress};
 use crate::methods::compress::{SnappyCompress, GZipCompress};
 use my_bit_vec::BitVec;
 use crate::query::bit_vec_iter::BVIter;
+use crate::compress::scaled_slice::ScaledSliceCompress;
 
 pub fn tsbs_bench(compression: &str, query: &str){
     let mut other = 0.0;
@@ -135,6 +136,16 @@ pub fn tsbs_bench(compression: &str, query: &str){
                 println!("Time elapsed in buff-slice project function() is: {:?}", duration6);
 
             },
+            "scaled-slice" => {
+                let comp = ScaledSliceCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                lati = comp.scaled_slice_decode_condition(latitude,iter.clone());
+                longti = comp.scaled_slice_decode_condition(longtitude,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff-slice project function() is: {:?}", duration6);
+
+            },
             _ => {panic!("Compression not supported yet.")}
         }
 
@@ -149,7 +160,7 @@ pub fn tsbs_bench(compression: &str, query: &str){
     }
     else if query=="single" {
         let fuel = get_comp_file("d_fuel_state.csv",compression);
-        let r_tag = get_csv_file("r_tags_id.csv");
+        let r_tag = get_csv_file("d_tags_id.csv");
         let t_id = get_csv_file("t_id_south.csv");
         let scl = 10;
         let start = Instant::now();
@@ -170,6 +181,7 @@ pub fn tsbs_bench(compression: &str, query: &str){
             }
             i-=1;
         }
+        println!("candidates size: {}", cands.len());
         let mut iter = cands.iter();
         let mut f = Vec::new();
         println!("integer join runtime: {:?}",start.elapsed());
@@ -254,6 +266,15 @@ pub fn tsbs_bench(compression: &str, query: &str){
                 println!("Time elapsed in buff-slice single function() is: {:?}", duration6);
 
             },
+            "scaled-slice" => {
+                let comp = ScaledSliceCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                comp.scaled_slice_range_smaller_filter_condition(fuel,0.1,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff-slice single function() is: {:?}", duration6);
+
+            },
             _ => {panic!("Compression not supported yet.")}
         }
         let mut res = Vec::new();
@@ -276,7 +297,7 @@ pub fn tsbs_bench(compression: &str, query: &str){
         let fuel = get_comp_file("dt_cur_load.csv",compression);
         let r_tag = get_csv_file("d_tags_id.csv");
         let t_id = get_csv_file("t_id_west.csv");
-        let scl = 10000;
+        let scl = 1000;
         let pred = 0.9;
         let mut f = BitVec::new();
         let len  = r_tag.len();
@@ -298,6 +319,7 @@ pub fn tsbs_bench(compression: &str, query: &str){
             }
             i-=1;
         }
+        println!("candidates size: {}", cands.len());
         let mut iter = cands.iter();
         println!("integer join runtime: {:?}",start.elapsed());
 
@@ -376,6 +398,141 @@ pub fn tsbs_bench(compression: &str, query: &str){
                 let comp = BuffSliceCompress::new(10,10,scl);
                 let start6 = Instant::now();
                 f = comp.buff_slice_range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff-slice range function() is: {:?}", duration6);
+
+            },
+            "scaled-slice" => {
+                let comp = ScaledSliceCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.scaled_slice_range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in scaled-slice range function() is: {:?}", duration6);
+
+            },
+            _ => {panic!("Compression not supported yet.")}
+        }
+
+        let duration = start.elapsed();
+        fl_time= duration6.as_micros() as f64/1000.0664;
+        total = duration.as_micros() as f64/1000.0f64;
+        other = total-fl_time;
+        println!("extracted cur_load values: {}",f.cardinality());
+        println!("Time elapsed in tsbs cur_load function() is: {:?}", duration);
+
+    }
+    else if query=="range-new" {
+        let fuel = get_comp_file("dt_cur_load.csv",compression);
+        let r_tag = get_csv_file("d_tags_id.csv");
+        let t_id = get_csv_file("t_id_west_null.csv");
+        let scl = 1000;
+        let pred = 0.9;
+        let mut f = BitVec::new();
+        let len  = r_tag.len();
+        let start = Instant::now();
+
+        let mut i = 0;
+        let mut cands = Vec::new();
+        let mut id_set:HashSet<usize> = HashSet::from_iter(t_id.iter().cloned());
+        let mut id_loc = Vec::new();
+        // get tag id
+        for &e in r_tag.iter() {
+            if e<100{
+                cands.push(i);
+                id_loc.push(e);
+            }
+            i+=1;
+        }
+        println!("candidates size: {}", cands.len());
+        let mut iter = cands.iter();
+        println!("integer join runtime: {:?}",start.elapsed());
+
+        match compression{
+            "buff" => {
+                let comp = SplitBDDoubleCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.buff_range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff range function() is: {:?}", duration6);
+            },
+            "buff-major" => {
+                let comp = SplitBDDoubleCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.buff_range_filter_majority_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff-major range function() is: {:?}", duration6);
+
+            },
+            "gorilla" => {
+                let comp = GorillaCompress::new(10,10);
+                let start6 = Instant::now();
+                f = comp.range_filter_condition(fuel,pred,iter,len);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in gorilla range function() is: {:?}", duration6);
+            },
+            "gorillabd" => {
+                let comp = GorillaBDCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.range_filter_condition(fuel,pred, iter, len);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in gorillabd range function() is: {:?}", duration6);
+            },
+
+            "snappy" => {
+                let comp = SnappyCompress::new(10,10);
+                let start6 = Instant::now();
+                f = comp.range_filter_condition(fuel,pred, iter, len);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in snappy range function() is: {:?}", duration6);
+            },
+
+            "gzip" => {
+                let comp = GZipCompress::new(10,10);
+                let start6 = Instant::now();
+                f = comp.range_filter_condition(fuel,pred, iter, len);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in gzip range function() is: {:?}", duration6);
+
+            },
+
+            "fixed" => {
+                let comp = SplitBDDoubleCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.fixed_range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in fixed range function() is: {:?}", duration6);
+
+            },
+            "sprintz" => {
+                let comp = SprintzDoubleCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+                println!("Time elapsed in sprintz range function() is: {:?}", duration6);
+
+            },
+            "buff-slice" => {
+                let comp = BuffSliceCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.buff_slice_range_filter_condition(fuel,pred,iter);
+                duration6 = start6.elapsed();
+
+                println!("Time elapsed in buff-slice range function() is: {:?}", duration6);
+
+            },
+            "scaled-slice" => {
+                let comp = ScaledSliceCompress::new(10,10,scl);
+                let start6 = Instant::now();
+                f = comp.scaled_slice_range_filter_condition(fuel,pred,iter);
                 duration6 = start6.elapsed();
 
                 println!("Time elapsed in buff-slice range function() is: {:?}", duration6);

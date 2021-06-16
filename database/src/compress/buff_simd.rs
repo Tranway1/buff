@@ -9,7 +9,7 @@ use crate::simd::vectorize_query::{range_simd_myroaring, equal_simd_myroaring, e
 use std::mem;
 use log::{info,error};
 use serde::{Serialize, Deserialize};
-use crate::compress::buff_slice::{flip, floor, set_pred_word, BYTE_WORD, avx_iszero};
+use crate::compress::buff_slice::{flip, floor, set_pred_word, BYTE_WORD, avx_iszero, ceil};
 use crate::compress::PRECISION_MAP;
 use itertools::Itertools;
 use std::ops::{BitAnd, BitOr};
@@ -3141,7 +3141,7 @@ impl SplitBDDoubleCompress {
             if fixed<min {
                 min = fixed;
             }
-            if fixed>max {
+            else if fixed>max {
                 max = fixed;
             }
             fixed_vec.push(fixed);
@@ -3357,6 +3357,7 @@ impl SplitBDDoubleCompress {
     }
 
 
+
     pub(crate) fn buff_simd_range_filter(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -3417,6 +3418,7 @@ impl SplitBDDoubleCompress {
             if remain>=8{
                 remain-=8;
                 byte_count+=1;
+                // todo: avoid check_ratio checking if previous step is using progressive filtering
                 if check_ratio>SIMD_THRESHOLD{
                     let mut temp_res = BitVec::from_elem(len, false);
                     let chunk = bitpack.read_n_byte(len as usize).unwrap();
@@ -3730,6 +3732,7 @@ impl SplitBDDoubleCompress {
         println!("Number of qualified int items:{}", res.cardinality());
     }
 
+    /// simulate buff filtering execution in BS way
     pub(crate) fn buff_simd_range_filter_with_slice(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -3881,6 +3884,7 @@ impl SplitBDDoubleCompress {
     }
 
 
+    /// simulate buff in BS way
     pub(crate) fn buff_simd_equal_filter_with_slice(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;
         let prec_delta = get_precision_bound(prec);
@@ -4357,6 +4361,147 @@ impl SplitBDDoubleCompress {
             }
         }
         println!("Number of qualified int items:{}", res.len());
+    }
+
+    pub fn buff_horizontal_decode(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut bits:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let trail = (remain%8) as usize;
+        let left = ceil(len*trail as u32,8);
+        println!("left is {}",left);
+        match num {
+            1=>{
+                if trail==0{
+                    chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (*chunk0.get(index).unwrap()) as i64 ) as f64 / dec_scl);
+                    }
+                }
+                else {
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (bitpack.read_bits(trail).unwrap()) as i64 ) as f64 / dec_scl);
+                    }
+                }
+
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap();
+                if trail==0{
+                    chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                    let r1 = 8;
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<r1) ) |
+                            (*chunk1.get(index).unwrap())  as u64) as i64 ) as f64 / dec_scl);
+                    }
+                }
+                else {
+                    let r1 = trail;
+                    bits = bitpack.read_n_byte_unmut((len) as usize, left as usize).unwrap();
+                    let mut bitpack1 = BitPack::<&[u8]>::new(bits);
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<(trail)) ) |
+                            ((bitpack1.read_bits(trail).unwrap())) as u64) as i64 ) as f64 / dec_scl);
+                    }
+                }
+
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                if trail==0{
+                    let r0 = 16;
+                    let r1 = 8;
+                    chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<(r0)) as u64)|
+                            ((((*chunk1.get(index).unwrap()) as u64)<<(r1) )as u64) |
+                            (*chunk2.get(index).unwrap()) as u64) as i64 ) as f64 / dec_scl);
+                    }
+                }
+                else {
+                    let r0 = 8+trail;
+                    let r1 = trail;
+                    bits = bitpack.read_n_byte_unmut((2*len) as usize, left as usize).unwrap();
+                    let mut bitpack1 = BitPack::<&[u8]>::new(bits);
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<(r0)) as u64)|
+                            ((((*chunk1.get(index).unwrap()) as u64)<<(r1) )as u64) |
+                            ((bitpack1.read_bits(trail).unwrap())) as u64) as i64 ) as f64 / dec_scl);
+                    }
+                }
+
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                if trail==0{
+                    let r0 = 24;
+                    let r1 = 16;
+                    let r2 = 8;
+                    chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<(r0) )as u64)|
+                            ((((*chunk1.get(index).unwrap()) as u64)<<(r1)) as u64)|
+                            ((((*chunk2.get(index).unwrap()) as u64)<<(r2)) as u64) |
+                            (*chunk3.get(index).unwrap()) as u64) as i64 ) as f64 / dec_scl);
+
+                    }
+                }
+                else{
+                    let r0 = 16+trail;
+                    let r1 = 8+trail;
+                    let r2 = trail;
+                    bits = bitpack.read_n_byte_unmut((3*len) as usize, left as usize).unwrap();
+                    let mut bitpack1 = BitPack::<&[u8]>::new(bits);
+                    for index in 0..len as usize{
+                        expected_datapoints.push((base_int + (((((*chunk0.get(index).unwrap()) as u64)<<(r0) )as u64)|
+                            ((((*chunk1.get(index).unwrap()) as u64)<<(r1)) as u64)|
+                            ((((*chunk2.get(index).unwrap()) as u64)<<(r2)) as u64) |
+                            ((bitpack1.read_bits(trail).unwrap())) as u64) as i64 ) as f64 / dec_scl);
+                    }
+
+                }
+
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
     }
 
     pub(crate) fn buff_range_filter(&self, bytes: Vec<u8>, pred:f64) {

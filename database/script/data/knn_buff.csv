@@ -1,0 +1,256 @@
+Time elapsed in knn is: 37
+../UCRArchive2018/ACSF1/ACSF1_TRAIN,-1,1,Percentage correct,0.5353535353535354
+Time elapsed in knn is: 59
+../UCRArchive2018/Adiac/Adiac_TRAIN,-1,1,Percentage correct,0.6102564102564103
+Time elapsed in knn is: 227
+../UCRArchive2018/AllGestureWiimoteX/AllGestureWiimoteX_TRAIN,-1,1,Percentage correct,0.41487839771101576
+Time elapsed in knn is: 232
+../UCRArchive2018/AllGestureWiimoteY/AllGestureWiimoteY_TRAIN,-1,1,Percentage correct,0.47067238912732473
+Time elapsed in knn is: 225
+../UCRArchive2018/AllGestureWiimoteZ/AllGestureWiimoteZ_TRAIN,-1,1,Percentage correct,0.41201716738197425
+Time elapsed in knn is: 3
+../UCRArchive2018/ArrowHead/ArrowHead_TRAIN,-1,1,Percentage correct,0.7586206896551724
+Time elapsed in knn is: 1
+../UCRArchive2018/BME/BME_TRAIN,-1,1,Percentage correct,0.825503355704698
+Time elapsed in knn is: 0
+../UCRArchive2018/Beef/Beef_TRAIN,-1,1,Percentage correct,0.6896551724137931
+Time elapsed in knn is: 0
+../UCRArchive2018/BeetleFly/BeetleFly_TRAIN,-1,1,Percentage correct,0.7368421052631579
+Time elapsed in knn is: 0
+../UCRArchive2018/BirdChicken/BirdChicken_TRAIN,-1,1,Percentage correct,0.5789473684210527
+Time elapsed in knn is: 6
+../UCRArchive2018/CBF/CBF_TRAIN,-1,1,Percentage correct,0.8598442714126807
+Time elapsed in knn is: 4
+../UCRArchive2018/Car/Car_TRAIN,-1,1,Percentage correct,0.7288135593220338
+Time elapsed in knn is: 0
+../UCRArchive2018/Chinatown/Chinatown_TRAIN,-1,1,Percentage correct,0.9534883720930233
+Time elapsed in knn is: 690
+../UCRArchive2018/ChlorineConcentration/ChlorineConcentration_TRAIN,-1,1,Percentage correct,0.6501693149257619
+Time elapsed in knn is: 192
+../UCRArchive2018/CinCECGTorso/CinCECGTorso_TRAIN,-1,1,Percentage correct,0.8919506889050036
+Time elapsed in knn is: 0
+../UCRArchive2018/Coffee/Coffee_TRAIN,-1,1,Percentage correct,1
+Time elapsed in knn is: 103
+../UCRArchive2018/Computers/Computers_TRAIN,-1,1,Percentage correct,0.5783132530120482
+Time elapsed in knn is: 97
+../UCRArchive2018/CricketX/CricketX_TRAIN,-1,1,Percentage correct,0.5758354755784062
+Time elapsed in knn is: 104
+../UCRArchive2018/CricketY/CricketY_TRAIN,-1,1,Percentage correct,0.5655526992287918
+Time elapsed in knn is: 100
+../UCRArchive2018/CricketZ/CricketZ_TRAIN,-1,1,Percentage correct,0.5861182519280206
+Time elapsed in knn is: 10965
+../UCRArchive2018/Crop/Crop_TRAIN,-1,1,Percentage correct,0.7117090302994226
+Time elapsed in knn is: 3
+../UCRArchive2018/DiatomSizeReduction/DiatomSizeReduction_TRAIN,-1,1,Percentage correct,0.9344262295081968
+Time elapsed in knn is: 9
+../UCRArchive2018/DistalPhalanxOutlineAgeGroup/DistalPhalanxOutlineAgeGroup_TRAIN,-1,1,Percentage correct,0.6231884057971014
+Time elapsed in knn is: 27
+../UCRArchive2018/DistalPhalanxOutlineCorrect/DistalPhalanxOutlineCorrect_TRAIN,-1,1,Percentage correct,0.7163636363636363
+Time elapsed in knn is: 9
+../UCRArchive2018/DistalPhalanxTW/DistalPhalanxTW_TRAIN,-1,1,Percentage correct,0.6376811594202898
+Time elapsed in knn is: 3
+../UCRArchive2018/DodgerLoopDay/DodgerLoopDay_TRAIN,-1,1,Percentage correct,0.5443037974683544
+Time elapsed in knn is: 1
+../UCRArchive2018/DodgerLoopGame/DodgerLoopGame_TRAIN,-1,1,Percentage correct,0.8613138686131386
+Time elapsed in knn is: 1
+../UCRArchive2018/DodgerLoopWeekend/DodgerLoopWeekend_TRAIN,-1,1,Percentage correct,0.9854014598540146
+Time elapsed in knn is: 2
+../UCRArchive2018/ECG200/ECG200_TRAIN,-1,1,Percentage correct,0.8787878787878788
+Time elapsed in knn is: 679
+../UCRArchive2018/ECG5000/ECG5000_TRAIN,-1,1,Percentage correct,0.9248721938208491
+Time elapsed in knn is: 4
+../UCRArchive2018/ECGFiveDays/ECGFiveDays_TRAIN,-1,1,Percentage correct,0.7976744186046512
+Time elapsed in knn is: 345
+../UCRArchive2018/EOGHorizontalSignal/EOGHorizontalSignal_TRAIN,-1,1,Percentage correct,0.4155124653739612
+Time elapsed in knn is: 375
+../UCRArchive2018/EOGVerticalSignal/EOGVerticalSignal_TRAIN,-1,1,Percentage correct,0.44321329639889195
+Time elapsed in knn is: 51
+../UCRArchive2018/Earthquakes/Earthquakes_TRAIN,-1,1,Percentage correct,0.717391304347826
+Time elapsed in knn is: 12837
+../UCRArchive2018/ElectricDevices/ElectricDevices_TRAIN,-1,1,Percentage correct,0.5507133592736706
+Time elapsed in knn is: 917
+../UCRArchive2018/EthanolLevel/EthanolLevel_TRAIN,-1,1,Percentage correct,0.2745490981963928
+Time elapsed in knn is: 239
+../UCRArchive2018/FaceAll/FaceAll_TRAIN,-1,1,Percentage correct,0.7134399052693902
+Time elapsed in knn is: 1
+../UCRArchive2018/FaceFour/FaceFour_TRAIN,-1,1,Percentage correct,0.7816091954022989
+Time elapsed in knn is: 119
+../UCRArchive2018/FacesUCR/FacesUCR_TRAIN,-1,1,Percentage correct,0.7637872132747682
+Time elapsed in knn is: 124
+../UCRArchive2018/FiftyWords/FiftyWords_TRAIN,-1,1,Percentage correct,0.6299559471365639
+Time elapsed in knn is: 32
+../UCRArchive2018/Fish/Fish_TRAIN,-1,1,Percentage correct,0.7816091954022989
+Time elapsed in knn is: 4792
+../UCRArchive2018/FordA/FordA_TRAIN,-1,1,Percentage correct,0.6648976497346475
+Time elapsed in knn is: 3177
+../UCRArchive2018/FordB/FordB_TRAIN,-1,1,Percentage correct,0.6056860321384425
+Time elapsed in knn is: 267
+../UCRArchive2018/FreezerRegularTrain/FreezerRegularTrain_TRAIN,-1,1,Percentage correct,0.8048438048438048
+Time elapsed in knn is: 47
+../UCRArchive2018/FreezerSmallTrain/FreezerSmallTrain_TRAIN,-1,1,Percentage correct,0.6756756756756757
+Time elapsed in knn is: 1
+../UCRArchive2018/Fungi/Fungi_TRAIN,-1,1,Percentage correct,0.8
+Time elapsed in knn is: 21
+../UCRArchive2018/GestureMidAirD1/GestureMidAirD1_TRAIN,-1,1,Percentage correct,0.5426356589147286
+Time elapsed in knn is: 21
+../UCRArchive2018/GestureMidAirD2/GestureMidAirD2_TRAIN,-1,1,Percentage correct,0.5891472868217055
+Time elapsed in knn is: 21
+../UCRArchive2018/GestureMidAirD3/GestureMidAirD3_TRAIN,-1,1,Percentage correct,0.2868217054263566
+Time elapsed in knn is: 21
+../UCRArchive2018/GesturePebbleZ1/GesturePebbleZ1_TRAIN,-1,1,Percentage correct,0.7719298245614035
+Time elapsed in knn is: 23
+../UCRArchive2018/GesturePebbleZ2/GesturePebbleZ2_TRAIN,-1,1,Percentage correct,0.802547770700637
+Time elapsed in knn is: 2
+../UCRArchive2018/GunPoint/GunPoint_TRAIN,-1,1,Percentage correct,0.912751677852349
+Time elapsed in knn is: 14
+../UCRArchive2018/GunPointAgeSpan/GunPointAgeSpan_TRAIN,-1,1,Percentage correct,0.8984126984126984
+Time elapsed in knn is: 14
+../UCRArchive2018/GunPointMaleVersusFemale/GunPointMaleVersusFemale_TRAIN,-1,1,Percentage correct,0.9714285714285714
+Time elapsed in knn is: 14
+../UCRArchive2018/GunPointOldVersusYoung/GunPointOldVersusYoung_TRAIN,-1,1,Percentage correct,0.9522292993630573
+Time elapsed in knn is: 10
+../UCRArchive2018/Ham/Ham_TRAIN,-1,1,Percentage correct,0.6057692307692307
+Time elapsed in knn is: 2270
+../UCRArchive2018/HandOutlines/HandOutlines_TRAIN,-1,1,Percentage correct,0.8617886178861789
+Time elapsed in knn is: 112
+../UCRArchive2018/Haptics/Haptics_TRAIN,-1,1,Percentage correct,0.36807817589576547
+Time elapsed in knn is: 4
+../UCRArchive2018/Herring/Herring_TRAIN,-1,1,Percentage correct,0.47619047619047616
+Time elapsed in knn is: 20
+../UCRArchive2018/HouseTwenty/HouseTwenty_TRAIN,-1,1,Percentage correct,0.6610169491525424
+Time elapsed in knn is: 219
+../UCRArchive2018/InlineSkate/InlineSkate_TRAIN,-1,1,Percentage correct,0.33879781420765026
+Time elapsed in knn is: 20
+../UCRArchive2018/InsectEPGRegularTrain/InsectEPGRegularTrain_TRAIN,-1,1,Percentage correct,0.6774193548387096
+Time elapsed in knn is: 4
+../UCRArchive2018/InsectEPGSmallTrain/InsectEPGSmallTrain_TRAIN,-1,1,Percentage correct,0.6653225806451613
+Time elapsed in knn is: 239
+../UCRArchive2018/InsectWingbeatSound/InsectWingbeatSound_TRAIN,-1,1,Percentage correct,0.5603840323395655
+Time elapsed in knn is: 3
+../UCRArchive2018/ItalyPowerDemand/ItalyPowerDemand_TRAIN,-1,1,Percentage correct,0.9552529182879378
+Time elapsed in knn is: 203
+../UCRArchive2018/LargeKitchenAppliances/LargeKitchenAppliances_TRAIN,-1,1,Percentage correct,0.4946524064171123
+Time elapsed in knn is: 4
+../UCRArchive2018/Lightning2/Lightning2_TRAIN,-1,1,Percentage correct,0.7666666666666667
+Time elapsed in knn is: 3
+../UCRArchive2018/Lightning7/Lightning7_TRAIN,-1,1,Percentage correct,0.5416666666666666
+Time elapsed in knn is: 265
+../UCRArchive2018/Mallat/Mallat_TRAIN,-1,1,Percentage correct,0.9129692832764505
+Time elapsed in knn is: 3
+../UCRArchive2018/Meat/Meat_TRAIN,-1,1,Percentage correct,0.9322033898305084
+Time elapsed in knn is: 58
+../UCRArchive2018/MedicalImages/MedicalImages_TRAIN,-1,1,Percentage correct,0.6851119894598156
+Time elapsed in knn is: 157
+../UCRArchive2018/MelbournePedestrian/MelbournePedestrian_TRAIN,-1,1,Percentage correct,0.8481012658227848
+Time elapsed in knn is: 10
+../UCRArchive2018/MiddlePhalanxOutlineAgeGroup/MiddlePhalanxOutlineAgeGroup_TRAIN,-1,1,Percentage correct,0.5294117647058824
+Time elapsed in knn is: 26
+../UCRArchive2018/MiddlePhalanxOutlineCorrect/MiddlePhalanxOutlineCorrect_TRAIN,-1,1,Percentage correct,0.7655172413793103
+Time elapsed in knn is: 10
+../UCRArchive2018/MiddlePhalanxTW/MiddlePhalanxTW_TRAIN,-1,1,Percentage correct,0.5163398692810458
+Time elapsed in knn is: 2416
+../UCRArchive2018/MixedShapesRegularTrain/MixedShapesRegularTrain_TRAIN,-1,1,Percentage correct,0.8972772277227723
+Time elapsed in knn is: 525
+../UCRArchive2018/MixedShapesSmallTrain/MixedShapesSmallTrain_TRAIN,-1,1,Percentage correct,0.8353960396039604
+Time elapsed in knn is: 3
+../UCRArchive2018/MoteStrain/MoteStrain_TRAIN,-1,1,Percentage correct,0.8784972022382095
+Time elapsed in knn is: 5444
+../UCRArchive2018/NonInvasiveFetalECGThorax1/NonInvasiveFetalECGThorax1_TRAIN,-1,1,Percentage correct,0.8294297352342159
+Time elapsed in knn is: 5216
+../UCRArchive2018/NonInvasiveFetalECGThorax2/NonInvasiveFetalECGThorax2_TRAIN,-1,1,Percentage correct,0.880346232179226
+Time elapsed in knn is: 44
+../UCRArchive2018/OSULeaf/OSULeaf_TRAIN,-1,1,Percentage correct,0.5228215767634855
+Time elapsed in knn is: 0
+../UCRArchive2018/OliveOil/OliveOil_TRAIN,-1,1,Percentage correct,0.896551724137931
+Time elapsed in knn is: 777
+../UCRArchive2018/PLAID/PLAID_TRAIN,-1,1,Percentage correct,0.539179104477612
+Time elapsed in knn is: 266
+../UCRArchive2018/PhalangesOutlinesCorrect/PhalangesOutlinesCorrect_TRAIN,-1,1,Percentage correct,0.7607934655775963
+Time elapsed in knn is: 887
+../UCRArchive2018/Phoneme/Phoneme_TRAIN,-1,1,Percentage correct,0.10923482849604221
+Time elapsed in knn is: 1
+../UCRArchive2018/PickupGestureWiimoteZ/PickupGestureWiimoteZ_TRAIN,-1,1,Percentage correct,0.6530612244897959
+Time elapsed in knn is: 97
+../UCRArchive2018/PigAirwayPressure/PigAirwayPressure_TRAIN,-1,1,Percentage correct,0.057971014492753624
+Time elapsed in knn is: 94
+../UCRArchive2018/PigArtPressure/PigArtPressure_TRAIN,-1,1,Percentage correct,0.12077294685990338
+Time elapsed in knn is: 95
+../UCRArchive2018/PigCVP/PigCVP_TRAIN,-1,1,Percentage correct,0.07729468599033816
+Time elapsed in knn is: 3
+../UCRArchive2018/Plane/Plane_TRAIN,-1,1,Percentage correct,0.9615384615384616
+Time elapsed in knn is: 10
+../UCRArchive2018/PowerCons/PowerCons_TRAIN,-1,1,Percentage correct,0.9329608938547486
+Time elapsed in knn is: 14
+../UCRArchive2018/ProximalPhalanxOutlineAgeGroup/ProximalPhalanxOutlineAgeGroup_TRAIN,-1,1,Percentage correct,0.7843137254901961
+Time elapsed in knn is: 30
+../UCRArchive2018/ProximalPhalanxOutlineCorrect/ProximalPhalanxOutlineCorrect_TRAIN,-1,1,Percentage correct,0.8068965517241379
+Time elapsed in knn is: 14
+../UCRArchive2018/ProximalPhalanxTW/ProximalPhalanxTW_TRAIN,-1,1,Percentage correct,0.7058823529411765
+Time elapsed in knn is: 226
+../UCRArchive2018/RefrigerationDevices/RefrigerationDevices_TRAIN,-1,1,Percentage correct,0.39572192513368987
+Time elapsed in knn is: 5
+../UCRArchive2018/Rock/Rock_TRAIN,-1,1,Percentage correct,0.7142857142857143
+Time elapsed in knn is: 217
+../UCRArchive2018/ScreenType/ScreenType_TRAIN,-1,1,Percentage correct,0.3609625668449198
+Time elapsed in knn is: 560
+../UCRArchive2018/SemgHandGenderCh2/SemgHandGenderCh2_TRAIN,-1,1,Percentage correct,0.7629382303839732
+Time elapsed in knn is: 645
+../UCRArchive2018/SemgHandMovementCh2/SemgHandMovementCh2_TRAIN,-1,1,Percentage correct,0.36971046770601335
+Time elapsed in knn is: 636
+../UCRArchive2018/SemgHandSubjectCh2/SemgHandSubjectCh2_TRAIN,-1,1,Percentage correct,0.4053452115812918
+Time elapsed in knn is: 2
+../UCRArchive2018/ShakeGestureWiimoteZ/ShakeGestureWiimoteZ_TRAIN,-1,1,Percentage correct,0.5918367346938775
+Time elapsed in knn is: 3
+../UCRArchive2018/ShapeletSim/ShapeletSim_TRAIN,-1,1,Percentage correct,0.5363128491620112
+Time elapsed in knn is: 402
+../UCRArchive2018/ShapesAll/ShapesAll_TRAIN,-1,1,Percentage correct,0.7512520868113522
+Time elapsed in knn is: 226
+../UCRArchive2018/SmallKitchenAppliances/SmallKitchenAppliances_TRAIN,-1,1,Percentage correct,0.3422459893048128
+Time elapsed in knn is: 0
+../UCRArchive2018/SmoothSubspace/SmoothSubspace_TRAIN,-1,1,Percentage correct,0.912751677852349
+Time elapsed in knn is: 1
+../UCRArchive2018/SonyAIBORobotSurface1/SonyAIBORobotSurface1_TRAIN,-1,1,Percentage correct,0.7133333333333334
+Time elapsed in knn is: 3
+../UCRArchive2018/SonyAIBORobotSurface2/SonyAIBORobotSurface2_TRAIN,-1,1,Percentage correct,0.8602941176470589
+Time elapsed in knn is: 17569
+../UCRArchive2018/StarLightCurves/StarLightCurves_TRAIN,-1,1,Percentage correct,0.8486945962355799
+Time elapsed in knn is: 114
+../UCRArchive2018/Strawberry/Strawberry_TRAIN,-1,1,Percentage correct,0.94579945799458
+Time elapsed in knn is: 86
+../UCRArchive2018/SwedishLeaf/SwedishLeaf_TRAIN,-1,1,Percentage correct,0.7884615384615384
+Time elapsed in knn is: 19
+../UCRArchive2018/Symbols/Symbols_TRAIN,-1,1,Percentage correct,0.8792756539235412
+Time elapsed in knn is: 11
+../UCRArchive2018/SyntheticControl/SyntheticControl_TRAIN,-1,1,Percentage correct,0.8795986622073578
+Time elapsed in knn is: 5
+../UCRArchive2018/ToeSegmentation1/ToeSegmentation1_TRAIN,-1,1,Percentage correct,0.6916299559471366
+Time elapsed in knn is: 3
+../UCRArchive2018/ToeSegmentation2/ToeSegmentation2_TRAIN,-1,1,Percentage correct,0.7906976744186046
+Time elapsed in knn is: 6
+../UCRArchive2018/Trace/Trace_TRAIN,-1,1,Percentage correct,0.7676767676767676
+Time elapsed in knn is: 4
+../UCRArchive2018/TwoLeadECG/TwoLeadECG_TRAIN,-1,1,Percentage correct,0.7469244288224957
+Time elapsed in knn is: 1043
+../UCRArchive2018/TwoPatterns/TwoPatterns_TRAIN,-1,1,Percentage correct,0.9067266816704176
+Time elapsed in knn is: 1
+../UCRArchive2018/UMD/UMD_TRAIN,-1,1,Percentage correct,0.7482517482517482
+Time elapsed in knn is: 6169
+../UCRArchive2018/UWaveGestureLibraryAll/UWaveGestureLibraryAll_TRAIN,-1,1,Percentage correct,0.9480592013404077
+Time elapsed in knn is: 2145
+../UCRArchive2018/UWaveGestureLibraryX/UWaveGestureLibraryX_TRAIN,-1,1,Percentage correct,0.739737503490645
+Time elapsed in knn is: 2212
+../UCRArchive2018/UWaveGestureLibraryY/UWaveGestureLibraryY_TRAIN,-1,1,Percentage correct,0.6618263055012567
+Time elapsed in knn is: 2115
+../UCRArchive2018/UWaveGestureLibraryZ/UWaveGestureLibraryZ_TRAIN,-1,1,Percentage correct,0.6489807316392069
+Time elapsed in knn is: 2049
+../UCRArchive2018/Wafer/Wafer_TRAIN,-1,1,Percentage correct,0.9954567580723673
+Time elapsed in knn is: 1
+../UCRArchive2018/Wine/Wine_TRAIN,-1,1,Percentage correct,0.6037735849056604
+Time elapsed in knn is: 102
+../UCRArchive2018/WordSynonyms/WordSynonyms_TRAIN,-1,1,Percentage correct,0.6169544740973313
+Time elapsed in knn is: 25
+../UCRArchive2018/Worms/Worms_TRAIN,-1,1,Percentage correct,0.4473684210526316
+Time elapsed in knn is: 26
+../UCRArchive2018/WormsTwoClass/WormsTwoClass_TRAIN,-1,1,Percentage correct,0.6052631578947368
+Time elapsed in knn is: 808
+../UCRArchive2018/Yoga/Yoga_TRAIN,-1,1,Percentage correct,0.8322774258086029

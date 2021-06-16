@@ -4,7 +4,7 @@ cd /home/cc/TimeSeriesDB/database;
 TIME=$4
 SCL=$2
 PRED=$3
-for comp in scaled-slice buff-slice buff-simd buff buff-major;
+for comp in scaled-slice buff-slice buff-simd buff buff-major scaled-slice-scalar buff-slice-scalar;
 #for comp in gorilla gorillabd;
 do
   for i in $(seq 1 $TIME);

@@ -16,6 +16,7 @@ use std::ptr::eq;
 use my_bit_vec::BitVec;
 use std::slice::Iter;
 use parquet::basic::Type::BYTE_ARRAY;
+use num::Float;
 
 pub const BYTE_WORD:u32 = 32u32;
 pub const REVERSE_i64:i64 = -9205322385119247871i64;
@@ -62,14 +63,89 @@ pub fn run_buff_slice_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
     println!("Time elapsed in buff slice equal filter function() is: {:?}", duration4);
 
     let start5 = Instant::now();
-    comp.buff_slice_range_filter_nosimd(comp_sum,pred);
+    // comp.buff_slice_range_filter_nosimd(comp_sum,pred);
+    comp.buff_slice_buffsum(comp_sum);
     let duration5 = start5.elapsed();
-    println!("Time elapsed in buff slice range no simd function() is: {:?}", duration5);
+    // println!("Time elapsed in buff slice range no simd function() is: {:?}", duration5);
+    println!("Time elapsed in buff slice sum function() is: {:?}", duration5);
 
     let start6 = Instant::now();
-    comp.buff_slice_equal_filter_nosimd(comp_max,pred);
+    // comp.buff_slice_equal_filter_nosimd(comp_max,pred);
+    comp.buff_slice_buffmax(comp_max);
     let duration6 = start6.elapsed();
-    println!("Time elapsed in buff slice eqaul no simd function() is: {:?}", duration6);
+    // println!("Time elapsed in buff slice eqaul no simd function() is: {:?}", duration6);
+    println!("Time elapsed in buff slice max function() is: {:?}", duration6);
+
+    // println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+    //          comp_size as f64/ org_size as f64,
+    //          duration1.as_nanos() as f64 / 1000000.0,
+    //          duration2.as_nanos() as f64 / 1000000.0,
+    //          duration3.as_nanos() as f64 / 1000000.0,
+    //          duration4.as_nanos() as f64 / 1000000.0,
+    //          duration5.as_nanos() as f64 / 1000000.0,
+    //          duration6.as_nanos() as f64 / 1000000.0
+    // )
+
+    println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
+             comp_size as f64/ org_size as f64,
+             1000000000.0 * org_size as f64 / duration1.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration2.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration3.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration4.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration5.as_nanos() as f64 / 1024.0/1024.0,
+             1000000000.0 * org_size as f64 / duration6.as_nanos() as f64 / 1024.0/1024.0
+
+
+    )
+}
+
+
+pub fn run_buff_slice_scalar_encoding_decoding(test_file:&str, scl:usize, pred: f64) {
+    let file_iter = construct_file_iterator_skip_newline::<f64>(test_file, 0, ',');
+    let file_vec: Vec<f64> = file_iter.unwrap()
+        .map(|x| (x*SCALE))
+        .collect();
+
+    let mut seg = Segment::new(None,SystemTime::now(),0,file_vec.clone(),None,None);
+    let org_size = seg.get_byte_size().unwrap();
+    let comp = BuffSliceCompress::new(10,10,scl);
+    let start1 = Instant::now();
+    let mut compressed= comp.buff_slice_encode(&mut seg);
+
+    let duration1 = start1.elapsed();
+    let comp_cp = compressed.clone();
+    let comp_eq = compressed.clone();
+    let comp_sum = compressed.clone();
+    let comp_max = compressed.clone();
+    let comp_size = compressed.len();
+    println!("Time elapsed in buff slice compress function() is: {:?}", duration1);
+
+    let start2 = Instant::now();
+    comp.buff_slice_decode_bs(compressed);
+    let duration2 = start2.elapsed();
+    println!("Time elapsed in buff slice decompress function() is: {:?}", duration2);
+
+    let start3 = Instant::now();
+    comp.buff_slice_range_filter_nosimd(comp_cp,pred);
+    let duration3 = start3.elapsed();
+    println!("Time elapsed in buff slice range filter function() is: {:?}", duration3);
+
+    let start4 = Instant::now();
+    comp.buff_slice_equal_filter_nosimd(comp_eq,pred);
+    let duration4 = start4.elapsed();
+    println!("Time elapsed in buff slice equal filter function() is: {:?}", duration4);
+
+    let start5 = Instant::now();
+    comp.buff_slice_sum(comp_sum);
+    let duration5 = start5.elapsed();
+    // println!("Time elapsed in buff slice range no simd function() is: {:?}", duration5);
+    println!("Time elapsed in buff slice sum function() is: {:?}", duration5);
+
+    let start6 = Instant::now();
+    comp.buff_slice_max(comp_max);
+    let duration6 = start6.elapsed();
+    // println!("Time elapsed in buff slice eqaul no simd function() is: {:?}", duration6);
+    println!("Time elapsed in buff slice max function() is: {:?}", duration6);
 
     // println!("Performance:{},{},{},{},{},{},{},{},{},{}", test_file, scl, pred,
     //          comp_size as f64/ org_size as f64,
@@ -236,22 +312,24 @@ impl BuffSliceCompress {
         println!("precision {}, precision delta:{}", prec, prec_delta);
 
         let mut bound = PrecisionBound::new(prec_delta);
-        // let start1 = Instant::now();
         let dec_len = *(PRECISION_MAP.get(&prec).unwrap()) as u64;
         bound.set_length(0,dec_len);
         let mut min = i64::max_value();
         let mut max = i64::min_value();
-
+        let start1= Instant::now();
         for bd in seg.get_data(){
             let fixed = bound.fetch_fixed_aligned((*bd).into());
             if fixed<min {
                 min = fixed;
             }
-            if fixed>max {
+            else if fixed>max {
                 max = fixed;
             }
             fixed_vec.push(fixed);
         }
+        let duration1 = start1.elapsed();
+        println!("Time elapsed in bit extract double function() is: {:?}", duration1);
+
         let delta = max-min;
         let base_fixed = min;
         println!("base integer: {}, max:{}",base_fixed,max);
@@ -466,6 +544,724 @@ impl BuffSliceCompress {
         expected_datapoints
     }
 
+    /// decode in buff way and max
+    pub fn buff_slice_buffmax(&self, bytes: Vec<u8>){
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+
+        let mut index = 0;
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk;
+        let mut f_cur = 0f64;
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut max = f64::min_value();
+
+
+        if remain<8{
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+            let padding = 8-remain;
+            index = 0;
+            for &x in chunk {
+                f_cur=(base_int + (flip(x)>>padding) as i64 ) as f64 / dec_scl;
+                if f_cur>max{
+                    max = f_cur;
+                    res.clear();
+                    res.set(index,true);
+                }
+                else if f_cur==max{
+                    res.set(index,true);
+                }
+                index+=1;
+            }
+            remain=0
+        }
+        else {
+            bytec+=1;
+            remain -= 8;
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+
+            if remain == 0 {
+                index = 0;
+                for &x in chunk {
+                    f_cur = (base_int + flip(x) as i64) as f64 / dec_scl;
+
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+                    index+=1
+                }
+            }
+            else{
+                // dec_vec.push((bitpack.read_byte().unwrap() as u32) << remain);
+                // let mut k = 0;
+                for x in chunk{
+                    // if k<10{
+                    //     println!("write {}th value with first byte {}",k,(*x))
+                    // }
+                    // k+=1;
+                    fixed_vec.push((flip(*x) as u64)<<remain)
+                }
+            }
+            println!("read the {}th byte of dec",bytec);
+
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                if remain == 0 {
+                    // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                    // let mut iiter = int_vec.iter();
+                    // let mut diter = dec_vec.iter();
+                    // for cur_chunk in chunk.iter(){
+                    //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                    // }
+
+                    index = 0;
+                    for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
+                        f_cur =  (base_int + ((*cur_fixed)|(flip(*cur_chunk) as u64)) as i64 ) as f64 / dec_scl;
+
+                        if f_cur>max{
+                            max = f_cur;
+                            res.clear();
+                            res.set(index,true);
+                        }
+                        else if f_cur==max{
+                            res.set(index,true);
+                        }
+                        index+=1;
+                    }
+                }
+                else{
+                    let mut it = chunk.into_iter();
+                    fixed_vec=fixed_vec.into_iter().map(|x| x|((flip(*(it.next().unwrap())) as u64)<<remain)).collect();
+                }
+
+
+                println!("read the {}th byte of dec",bytec);
+            }
+            // let duration = start.elapsed();
+            // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+            // let start5 = Instant::now();
+            if (remain>0){
+                println!("read remaining {} bits of dec",remain);
+                println!("length for fixed:{}", fixed_vec.len());
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                let padding = 8-remain;
+                index = 0;
+                for (&cur_fixed, &x) in fixed_vec.iter().zip(chunk.iter()){
+                    f_cur = (base_int + ((cur_fixed)|(flip(x) as u64 >> padding)) as i64) as f64 / dec_scl;
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+                    index+=1;
+                }
+            }
+        }
+        // for i in 0..10{
+        //     println!("{}th item:{}",i,expected_datapoints.get(i).unwrap())
+        // }
+
+        println!("Number of qualified max items:{}", res.cardinality());
+        println!("Max value:{}", max);
+    }
+
+    /// decode in buff way and sum
+    pub fn buff_slice_buffsum(&self, bytes: Vec<u8>){
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk;
+        let mut f_cur = 0f64;
+        let mut sum = 0.0;
+
+
+        if remain<8{
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+            let padding = 8-remain;
+            sum = 0.0;
+            for &x in chunk {
+                f_cur=(base_int + (flip(x)>>padding) as i64 ) as f64 / dec_scl;
+                sum+=f_cur;
+            }
+            remain=0
+        }
+        else {
+            bytec+=1;
+            remain -= 8;
+            chunk = bitpack.read_n_byte(len as usize).unwrap();
+
+            if remain == 0 {
+                sum = 0.0;
+                for &x in chunk {
+                    f_cur = (base_int + flip(x) as i64) as f64 / dec_scl;
+                    sum+=f_cur;
+                }
+            }
+            else{
+                // dec_vec.push((bitpack.read_byte().unwrap() as u32) << remain);
+                // let mut k = 0;
+                for x in chunk{
+                    // if k<10{
+                    //     println!("write {}th value with first byte {}",k,(*x))
+                    // }
+                    // k+=1;
+                    fixed_vec.push((flip(*x) as u64)<<remain)
+                }
+            }
+            println!("read the {}th byte of dec",bytec);
+
+            while (remain>=8){
+                bytec+=1;
+                remain -= 8;
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                if remain == 0 {
+                    // dec_vec=dec_vec.into_iter().map(|x| x|(bitpack.read_byte().unwrap() as u32)).collect();
+                    // let mut iiter = int_vec.iter();
+                    // let mut diter = dec_vec.iter();
+                    // for cur_chunk in chunk.iter(){
+                    //     expected_datapoints.push( *(iiter.next().unwrap()) as f64+ (((diter.next().unwrap())|((*cur_chunk) as u32)) as f64) / dec_scl);
+                    // }
+
+                    sum = 0.0;
+                    for (cur_fixed,cur_chunk) in fixed_vec.iter().zip(chunk.iter()){
+                        f_cur =  (base_int + ((*cur_fixed)|(flip(*cur_chunk) as u64)) as i64 ) as f64 / dec_scl;
+                        sum+=f_cur;
+                    }
+                }
+                else{
+                    let mut it = chunk.into_iter();
+                    fixed_vec=fixed_vec.into_iter().map(|x| x|((flip(*(it.next().unwrap())) as u64)<<remain)).collect();
+                }
+
+
+                println!("read the {}th byte of dec",bytec);
+            }
+            // let duration = start.elapsed();
+            // println!("Time elapsed in leading bytes: {:?}", duration);
+
+
+            // let start5 = Instant::now();
+            if (remain>0){
+                println!("read remaining {} bits of dec",remain);
+                println!("length for fixed:{}", fixed_vec.len());
+                chunk = bitpack.read_n_byte(len as usize).unwrap();
+                let padding = 8-remain;
+                sum = 0.0;
+                for (&cur_fixed, &x) in fixed_vec.iter().zip(chunk.iter()){
+                    f_cur = (base_int + ((cur_fixed)|(flip(x) as u64 >> padding)) as i64) as f64 / dec_scl;
+                    sum+=f_cur;
+                }
+            }
+        }
+        println!("sum value:{}",  sum);
+
+    }
+
+    /// load all data, deocde and max
+    pub fn buff_slice_max(&self, bytes: Vec<u8>){
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let padding = num*8-ilen-dlen;
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut max = f64::min_value();
+
+
+        match num {
+            1=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((flip(*chunk0.get(index).unwrap()) as u64)>>padding) as i64 ) as f64 / dec_scl;
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+
+                }
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap().clone();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(8-padding)) ) |
+                        ((flip(*chunk1.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+                }
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur=(base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(8-padding) )as u64) |
+                        ((flip(*chunk2.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+                }
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                   f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(24-padding) )as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk2.get(index).unwrap()) as u64)<<(8-padding)) as u64) |
+                        ((flip(*chunk3.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if f_cur>max{
+                        max = f_cur;
+                        res.clear();
+                        res.set(index,true);
+                    }
+                    else if f_cur==max{
+                        res.set(index,true);
+                    }
+                }
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+        println!("Number of qualified max items:{}", res.cardinality());
+        println!("Max value:{}", max);
+    }
+
+
+    pub fn buff_slice_max_range(&self, bytes: Vec<u8>,s:u32, e:u32, window:u32) {
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let padding = num*8-ilen-dlen;
+        let mut res = BitVec::from_elem(len as usize, false);
+        let mut max = f64::min_value();
+        let mut max_vec = Vec::new();
+        let mut cur_s= s as usize;
+
+
+        match num {
+            1=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((flip(*chunk0.get(index).unwrap()) as u64)>>padding) as i64 ) as f64 / dec_scl;
+                    if index< s as usize {
+                        continue;
+                    }else if index>= e as usize {
+                        break;
+                    }
+                    if index==cur_s+window as usize{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =f64::min_value();
+                        cur_s=index;
+                    }
+
+                    if f_cur > max{
+                        max =  f_cur;
+                        res.remove_range(cur_s  , index );
+                        res.set(index,true);
+                    }
+                    else if f_cur == max {
+                        res.set(index,true);
+                    }
+
+                }
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap().clone();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(8-padding)) ) |
+                        ((flip(*chunk1.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if index< s as usize {
+                        continue;
+                    }else if index>= e as usize {
+                        break;
+                    }
+                    if index==cur_s+window as usize{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =f64::min_value();
+                        cur_s=index;
+                    }
+
+                    if f_cur > max{
+                        max =  f_cur;
+                        res.remove_range(cur_s  , index );
+                        res.set(index,true);
+                    }
+                    else if f_cur == max {
+                        res.set(index,true);
+                    }
+
+                }
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur=(base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(8-padding) )as u64) |
+                        ((flip(*chunk2.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if index< s as usize {
+                        continue;
+                    }else if index>= e as usize {
+                        break;
+                    }
+                    if index==cur_s+window as usize{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =f64::min_value();
+                        cur_s=index;
+                    }
+
+                    if f_cur > max{
+                        max =  f_cur;
+                        res.remove_range(cur_s  , index );
+                        res.set(index,true);
+                    }
+                    else if f_cur == max {
+                        res.set(index,true);
+                    }
+
+                }
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(24-padding) )as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk2.get(index).unwrap()) as u64)<<(8-padding)) as u64) |
+                        ((flip(*chunk3.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    if index< s as usize {
+                        continue;
+                    }else if index>= e as usize {
+                        break;
+                    }
+                    if index==cur_s+window as usize{
+                        max_vec.push(max);
+                        // println!("{}",max);
+                        max =f64::min_value();
+                        cur_s=index;
+                    }
+
+                    if f_cur > max{
+                        max =  f_cur;
+                        res.remove_range(cur_s  , index );
+                        res.set(index,true);
+                    }
+                    else if f_cur == max {
+                        res.set(index,true);
+                    }
+
+                }
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+        assert_eq!((cur_s as u32-s)/window+1, (e-s)/window);
+        /// set max for last window
+        max_vec.push(max);
+
+        // println!("Number of qualified max items:{}", res.cardinality());
+        println!("Max value:{}", max_vec.len());
+    }
+
+    /// load all data, deocde and sum
+    pub fn buff_slice_sum(&self, bytes: Vec<u8>){
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let padding = num*8-ilen-dlen;
+        let mut sum = 0.0;
+
+
+        match num {
+            1=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((flip(*chunk0.get(index).unwrap()) as u64)>>padding) as i64 ) as f64 / dec_scl;
+                    sum+=f_cur;
+
+                }
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap().clone();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(8-padding)) ) |
+                        ((flip(*chunk1.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    sum+=f_cur;
+                }
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur=(base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(8-padding) )as u64) |
+                        ((flip(*chunk2.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    sum+=f_cur;
+                }
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    f_cur = (base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(24-padding) )as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk2.get(index).unwrap()) as u64)<<(8-padding)) as u64) |
+                        ((flip(*chunk3.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl;
+                    sum+=f_cur;
+                }
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+        println!("sum value:{}",  sum);
+    }
+
+    pub fn buff_slice_decode_bs(&self, bytes: Vec<u8>) -> Vec<f64>{
+        let prec = (self.scale as f32).log10() as i32;
+        let prec_delta = get_precision_bound(prec);
+
+        let mut bitpack = BitPack::<&[u8]>::new(bytes.as_slice());
+        let mut bound = PrecisionBound::new(prec_delta);
+        let lower = bitpack.read(32).unwrap();
+        let higher = bitpack.read(32).unwrap();
+        let ubase_int= (lower as u64)|((higher as u64)<<32);
+        let base_int = unsafe { mem::transmute::<u64, i64>(ubase_int) };
+        println!("base integer: {}",base_int);
+        let len = bitpack.read(32).unwrap();
+        println!("total vector size:{}",len);
+        let ilen = bitpack.read(32).unwrap();
+        println!("bit packing length:{}",ilen);
+        let dlen = bitpack.read(32).unwrap();
+        bound.set_length(ilen as u64, dlen as u64);
+        // check integer part and update bitmap;
+
+        let mut expected_datapoints:Vec<f64> = Vec::new();
+        let mut fixed_vec:Vec<u64> = Vec::new();
+
+        let mut dec_scl:f64 = 2.0f64.powi(dlen as i32);
+        println!("Scale for decimal:{}", dec_scl);
+
+        let mut remain = dlen+ilen;
+        let mut bytec = 0;
+        let mut chunk0:&[u8];
+        let mut chunk1:&[u8];
+        let mut chunk2:&[u8];
+        let mut chunk3:&[u8];
+        let mut f_cur = 0f64;
+        let num = ceil(remain, 8);
+        println!("Number of chunks:{}", num);
+
+        let padding = num*8-ilen-dlen;
+        match num {
+            1=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                for index in 0..len as usize{
+                    expected_datapoints.push((base_int + ((flip(*chunk0.get(index).unwrap()) as u64)>>padding) as i64 ) as f64 / dec_scl);
+                }
+            }
+            2=>{
+                chunk0 = bitpack.read_n_byte_unmut(0, len as usize).unwrap().clone();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(8-padding)) ) |
+                        ((flip(*chunk1.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+                }
+            }
+            3=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                for index in 0..len as usize{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(8-padding) )as u64) |
+                        ((flip(*chunk2.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+                }
+            }
+            4=>{
+                chunk0 = bitpack.read_n_byte_unmut(0,len as usize).unwrap();
+                chunk1 = bitpack.read_n_byte_unmut(len as usize,len as usize).unwrap();
+                chunk2 = bitpack.read_n_byte_unmut(2*len as usize,len as usize).unwrap();
+                chunk3 = bitpack.read_n_byte_unmut(3*len as usize, len as usize).unwrap();
+                for index in 0..len as usize{
+                    expected_datapoints.push((base_int + ((((flip(*chunk0.get(index).unwrap()) as u64)<<(24-padding) )as u64)|
+                        (((flip(*chunk1.get(index).unwrap()) as u64)<<(16-padding)) as u64)|
+                        (((flip(*chunk2.get(index).unwrap()) as u64)<<(8-padding)) as u64) |
+                        ((flip(*chunk3.get(index).unwrap()) as u64)>>padding) as u64) as i64 ) as f64 / dec_scl);
+
+                }
+            }
+            _ => {panic!("bit length greater than 32 is not supported yet.")}
+        }
+
+        println!("Number of scan items:{}", expected_datapoints.len());
+        expected_datapoints
+    }
+
 
     pub fn buff_slice_decode_condition(&self, bytes: Vec<u8>,cond:Iter<usize>) -> Vec<f64>{
         let prec = (self.scale as f32).log10() as i32;
@@ -547,6 +1343,7 @@ impl BuffSliceCompress {
         println!("Number of scan items:{}", expected_datapoints.len());
         expected_datapoints
     }
+
 
     pub(crate) fn buff_slice_range_filter(&self, bytes: Vec<u8>, pred:f64) {
         let prec = (self.scale as f32).log10() as i32;

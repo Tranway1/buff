@@ -352,7 +352,7 @@ impl SplitBDDoubleCompress {
         // let duration1 = start1.elapsed();
         // println!("Time elapsed in dividing double function() is: {:?}", duration1);
 
-        // let start1 = Instant::now();
+        let start1 = Instant::now();
         let mut remain = fixed_len;
         let mut bytec = 0;
 
@@ -402,12 +402,12 @@ impl SplitBDDoubleCompress {
             }
         }
 
+        let duration1 = start1.elapsed();
+        println!("Time elapsed in writing double function() is: {:?}", duration1);
 
         // println!("total number of dec is: {}", j);
         let vec = bitpack_vec.into_vec();
 
-        // let duration1 = start1.elapsed();
-        // println!("Time elapsed in writing double function() is: {:?}", duration1);
 
         let origin = t * mem::size_of::<T>() as u32;
         info!("original size:{}", origin);
@@ -448,7 +448,7 @@ impl SplitBDDoubleCompress {
             if fixed<min {
                 min = fixed;
             }
-            if fixed>max {
+            else if fixed>max {
                 max = fixed;
             }
             fixed_vec.push(fixed);

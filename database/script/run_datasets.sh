@@ -10,8 +10,8 @@ bash script/float_compress.sh /home/cc/TimeSeriesDB/taxi/dropoff_latitude-fullta
 mv performance.csv dropoff_latitude-performance.csv
 rm new.out
 
-bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 294.5538 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 295.7114 5 >> new.out
+bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 294.5538 5 >> new.out
 bash script/float_compress.sh /home/cc/float_comp/signal/time_series_120rpm-c8-supply-voltage.csv 10000 296.0503 5 >> new.out
 mv performance.csv ts120rpm-c8-performance.csv
 rm new.out
@@ -34,8 +34,8 @@ bash script/float_compress.sh /home/cc/float_comp/signal/Stocks-c1-open.csv 1000
 mv performance.csv stocks-open-performance.csv
 rm new.out
 
-bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 1.1886 5 >> new.out
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 8.8574 5 >> new.out
+bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 1.1886 5 >> new.out
 bash script/float_compress.sh /home/cc/TimeSeriesDB/UCRArchive2018/Kernel/UCR-all.csv 100000 13.909 5 >> new.out
 mv performance.csv UCR-all-performance.csv
 rm new.out

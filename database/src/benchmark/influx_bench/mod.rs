@@ -4,6 +4,8 @@ use crate::compress::sprintz::SprintzDoubleCompress;
 use crate::compress::split_double::SplitBDDoubleCompress;
 use crate::methods::compress::{GZipCompress, SnappyCompress};
 use crate::compress::gorilla::{GorillaCompress, GorillaBDCompress};
+use crate::compress::buff_slice::BuffSliceCompress;
+use crate::compress::scaled_slice::ScaledSliceCompress;
 
 
 pub fn influx_bench(compression: &str, query: &str){
@@ -146,11 +148,36 @@ pub fn influx_bench(compression: &str, query: &str){
             }
         },
         "buff-slice" => {
-            println!("Time elapsed in buff-slice max not supported");
+           let comp = BuffSliceCompress::new(10,10,scl);
+
             if query=="max"{
-
+                let start6 = Instant::now();
+                comp.buff_slice_buffmax(comp_max);
+                duration6 = start6.elapsed();
+                println!("Time elapsed in buff-slice max function() is: {:?}", duration6);
             }else if query=="max_groupby"{
+                // println!("Time elapsed in buff-slice max groupby not supported");
+                let start6 = Instant::now();
+                comp.buff_slice_max_range(comp_max,start,end,window);
+                duration6 = start6.elapsed();
+                println!("Time elapsed in buff-slice max groupby function() is: {:?}", duration6);
+            }
+        },
 
+        "scaled-slice" => {
+            let comp = ScaledSliceCompress::new(10,10,scl);
+
+            if query=="max"{
+                let start6 = Instant::now();
+                comp.scaled_slice_max(comp_max);
+                duration6 = start6.elapsed();
+                println!("Time elapsed in scaled-slice max function() is: {:?}", duration6);
+            }else if query=="max_groupby"{
+                // println!("Time elapsed in buff-slice max groupby not supported");
+                let start6 = Instant::now();
+                comp.scaled_slice_max_range(comp_max,start,end,window);
+                duration6 = start6.elapsed();
+                println!("Time elapsed in scaled-slice max groupby function() is: {:?}", duration6);
             }
         },
 
