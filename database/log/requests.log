@@ -1,0 +1,78 @@
+2021-09-28T19:55:11.353653-05:00 - input args["target/release/comp_profiler", "../UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T19:56:33.776745-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T19:56:37.971461-05:00 - min value:-50669
+2021-09-28T19:56:38.114116-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T19:56:38.114233-05:00 - Number of bits: 18
+2021-09-28T19:56:38.114247-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T19:56:38.419546-05:00 - original size:320000000
+2021-09-28T19:56:38.419600-05:00 - compressed size:120000009
+2021-09-28T19:57:08.439045-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T19:57:11.872387-05:00 - min value:-50669
+2021-09-28T19:57:12.076374-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T19:57:12.076509-05:00 - Number of bits: 18
+2021-09-28T19:57:12.076564-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T19:57:12.456335-05:00 - original size:320000000
+2021-09-28T19:57:12.456388-05:00 - compressed size:120000009
+2021-09-28T20:10:22.262342-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:10:27.786286-05:00 - min value:-50669
+2021-09-28T20:10:27.990707-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:10:27.991928-05:00 - Number of bits: 18
+2021-09-28T20:10:27.991958-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:10:28.597118-05:00 - original size:320000000
+2021-09-28T20:10:28.633278-05:00 - compressed size:120000009
+2021-09-28T20:10:46.805438-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:10:54.335557-05:00 - min value:-50669
+2021-09-28T20:10:54.468294-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:10:54.468444-05:00 - Number of bits: 18
+2021-09-28T20:10:54.468465-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:10:54.810109-05:00 - original size:320000000
+2021-09-28T20:10:54.810158-05:00 - compressed size:120000009
+2021-09-28T20:15:29.203519-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:15:34.232036-05:00 - min value:-50669
+2021-09-28T20:15:34.403182-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:15:34.403298-05:00 - Number of bits: 18
+2021-09-28T20:15:34.403314-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:15:34.709344-05:00 - original size:320000000
+2021-09-28T20:15:34.709402-05:00 - compressed size:120000009
+2021-09-28T20:18:20.836670-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:18:24.344716-05:00 - min value:-50669
+2021-09-28T20:18:24.480765-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:18:24.480956-05:00 - Number of bits: 18
+2021-09-28T20:18:24.480973-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:18:24.799707-05:00 - original size:320000000
+2021-09-28T20:18:24.799761-05:00 - compressed size:120000009
+2021-09-28T20:22:01.207789-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:22:04.643201-05:00 - min value:-50669
+2021-09-28T20:22:04.962113-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:22:04.962264-05:00 - Number of bits: 18
+2021-09-28T20:22:04.962380-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:22:05.382821-05:00 - original size:320000000
+2021-09-28T20:22:05.382877-05:00 - compressed size:120000009
+2021-09-28T20:32:48.572320-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T20:32:51.967442-05:00 - min value:-50669
+2021-09-28T20:32:52.230170-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:32:52.230283-05:00 - Number of bits: 18
+2021-09-28T20:32:52.230298-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T20:32:52.696814-05:00 - original size:320000000
+2021-09-28T20:32:52.696875-05:00 - compressed size:120000009
+2021-09-28T21:11:24.312243-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T21:11:29.174687-05:00 - min value:-50669
+2021-09-28T21:11:29.695122-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:11:29.695282-05:00 - Number of bits: 18
+2021-09-28T21:11:29.695308-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:11:30.753820-05:00 - original size:320000000
+2021-09-28T21:11:30.755303-05:00 - compressed size:120000009
+2021-09-28T21:18:00.752922-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T21:18:04.015501-05:00 - min value:-50669
+2021-09-28T21:18:04.155205-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:18:04.155323-05:00 - Number of bits: 18
+2021-09-28T21:18:04.155338-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:18:04.490790-05:00 - original size:320000000
+2021-09-28T21:18:04.490839-05:00 - compressed size:120000009
+2021-09-28T21:23:19.867549-05:00 - input args["target/release/comp_profiler", "/Users/chunwei/research/TimeSeriesDB/UCRArchive2018/Kernel/randomwalkdatasample1k-40k", "scaled-slice", "10000", "1.1509"]
+2021-09-28T21:23:23.583581-05:00 - min value:-50669
+2021-09-28T21:23:23.998143-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:23:23.998295-05:00 - Number of bits: 18
+2021-09-28T21:23:23.998317-05:00 - 10th vec: 55217,56726,61846,61933
+2021-09-28T21:23:24.450662-05:00 - original size:320000000
+2021-09-28T21:23:24.452271-05:00 - compressed size:120000009
