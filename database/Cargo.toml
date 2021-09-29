@@ -49,13 +49,8 @@ toml = "0.5.1"
 toml-loader = "0.1.1"
 queues = "1.1.0"
 nalgebra = "0.18.0"
-ndarray = "0.12.1"
-#ndarray-linalg = {version = "0.11"}
 flate2 = "1.0.11"
 parity-snappy = "0.1.0"
-#ndarray-linalg = { version = "0.11", features = ["openblas"] }
-#ndarray-linalg = { version = "0.11", features = ["netlib"] }
-ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
 tsz = "0.1.0"
 bitpacking = "0.8.2"
 lazy_static = "1.4.0"
@@ -63,7 +58,6 @@ croaring = "0.5.0"
 rust_decimal = "1.5.0"
 parquet = "2.0.0"
 libc = "0.2"
-#packed_simd = "0.3.3"
 histogram = "0.6.9"
 itertools = "0.9.0"
 zipf = "7.0.0"

@@ -6,8 +6,7 @@ extern crate toml_loader;
 #[macro_use] extern crate queues;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate itertools;
-#[macro_use] extern crate ndarray;
-extern crate ndarray_linalg;
+
 
 #[cfg(test)]
 extern crate quickcheck;

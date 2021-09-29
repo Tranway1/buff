@@ -1,5 +1,5 @@
 use crate::segment::{Segment, PAACompress, FourierCompress, fourier_compress, paa_compress};
-use ndarray::Array2;
+
 extern crate flate2;
 extern crate tsz;
 use log::{info, trace, warn};
@@ -23,7 +23,7 @@ use self::flate2::write::DeflateEncoder;
 use parity_snappy as snappy;
 use parity_snappy::{compress, decompress};
 use std::time::{SystemTime, Instant};
-use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed, read_dict};
+use crate::client::{construct_file_client_skip_newline, construct_file_iterator_skip_newline, construct_file_iterator_int, construct_file_iterator_int_signed};
 use self::bitpacking::BitPacker1x;
 use crate::methods::bit_packing::{BP_encoder, deltaBP_encoder, delta_offset, delta_num_bits, split_double_encoder, BitPack, bp_double_encoder, sprintz_double_encoder, unzigzag, BYTE_BITS};
 use std::str::FromStr;
@@ -43,7 +43,6 @@ use crate::compress::gorilla::{GorillaBDCompress, GorillaCompress};
 use crate::knn::{ get_gamma};
 use std::path::Path;
 use std::fmt::Debug;
-use ndarray_linalg::{Scalar, Lapack};
 use crate::compress::PRECISION_MAP;
 use self::tsz::{Encode, Decode};
 use std::slice::Iter;

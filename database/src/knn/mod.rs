@@ -8,7 +8,6 @@ use itertools::Itertools;
 use rustfft::FFTplanner;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use ndarray::Array2;
 use std::collections::HashMap;
 use core::mem;
 use crate::methods::compress::TEST_FILE;
