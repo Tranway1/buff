@@ -2,7 +2,6 @@ use std::env;
 use time_series_start::compress::{run_bpsplit_encoding_decoding, run_gorilla_encoding_decoding, run_gorillabd_encoding_decoding, run_snappy_encoding_decoding, run_gzip_encoding_decoding, run_bp_double_encoding_decoding, run_sprintz_double_encoding_decoding, run_parquet_write_filter, run_splitbd_byte_encoding_decoding, run_splitdouble_byte_encoding_decoding, run_splitdouble_encoding_decoding, run_splitdouble_byte_residue_encoding_decoding, run_splitdouble_byte_residue_majority_encoding_decoding, run_fixed_encoding_decoding};
 use log::{error, info, warn};
 use log4rs;
-use time_series_start::avl::btrarr::run_btr_array_index;
 use time_series_start::compress::buff_simd::{run_buff_simd_encoding_decoding, run_buff_encoding_decoding_mybitvec, run_buff_majority_encoding_decoding};
 use time_series_start::compress::buff_slice::{run_buff_slice_encoding_decoding, run_buff_slice_scalar_encoding_decoding};
 use time_series_start::compress::scaled_slice::{run_scaled_slice_encoding_decoding, run_scaled_slice_scalar_filtering_encoding_decoding};
@@ -83,9 +82,6 @@ fn main() {
 
         "dict" => {
             run_parquet_write_filter(input_file, int_scale, pred, "dict");
-        },
-        "btr" => {
-            run_btr_array_index(input_file, int_scale, pred);
         },
         "plain" => {run_parquet_write_filter(input_file, int_scale, pred, "plain");},
         "pqgzip" => {run_parquet_write_filter(input_file, int_scale, pred, "pqgzip");},

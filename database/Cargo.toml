@@ -25,20 +25,9 @@ name = "knn"
 path = "src/knn/main.rs"
 
 [[bin]]
-name = "predict"
-path = "src/predict/main.rs"
-
-[[bin]]
-name = "avl_tree"
-path = "src/avl/main.rs"
-
-[[bin]]
 name = "outlier_exp"
 path = "src/outlier/main.rs"
 
-[[bin]]
-name = "bench"
-path = "src/benchmark/main.rs"
 
 
 
@@ -72,7 +61,7 @@ bitpacking = "0.8.2"
 lazy_static = "1.4.0"
 croaring = "0.5.0"
 rust_decimal = "1.5.0"
-parquet = "5.4.0"
+parquet = "2.0.0"
 libc = "0.2"
 #packed_simd = "0.3.3"
 histogram = "0.6.9"

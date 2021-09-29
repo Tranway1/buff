@@ -28,15 +28,6 @@ pub fn get_random_byte_vec(n: usize) -> Vec<u8> {
 }
 
 
-// fn reduce(x: &[u8]) -> u8 {
-//     assert!(x.len() % 32 == 0);
-//     let mut sum = u8x32::splat(0); // [0, 0, 0, 0]
-//     for i in (0..x.len()).step_by(32) {
-//         sum += u8x32::from_slice_unaligned(&x[i..]);
-//     }
-//     sum.wrapping_sum()
-// }
-
 unsafe fn sum_simd(x: &[u8]) {
     let haystack = x;
     let start_ptr = haystack.as_ptr();

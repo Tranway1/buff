@@ -15,11 +15,9 @@ use rand::distributions::*;
 use rand::prelude::*;
 
 use std::sync::RwLock;
-use crate::buffer_pool::ClockBuffer;
 use std::sync::Arc;
 use tokio::prelude::*;
 
-use crate::future_signal::BufferedSignal;
 use ndarray::{Array1, Array2};
 use std::borrow::Borrow;
 

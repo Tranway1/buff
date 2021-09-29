@@ -1,7 +1,6 @@
 pub mod split_double;
 pub mod sprintz;
 pub mod gorilla;
-pub mod btr_array;
 pub mod buff_simd;
 pub mod buff_slice;
 pub mod scaled_slice;
@@ -843,8 +842,8 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
         REQUIRED DOUBLE b;
       }
     ";
-    let schema = Arc::new(parse_message_type(message_type).unwrap());
-    let props = Arc::new(WriterProperties::builder()
+    let schema = Rc::new(parse_message_type(message_type).unwrap());
+    let props = Rc::new(WriterProperties::builder()
         .set_encoding(Encoding::PLAIN)
         .set_compression(comp)
         .set_dictionary_pagesize_limit(dictpg_lim) // change max page size to avoid fallback to plain and make sure dict is used.

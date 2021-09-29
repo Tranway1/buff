@@ -7,8 +7,9 @@ pub mod fcm_encoder;
 pub mod prec_double;
 pub mod parquet;
 use std::fmt;
-use crate::dictionary::{DictionaryId};
 
+
+pub type DictionaryId = u32; /* Type alias for dictionary id */
 /*
  * Overview:
  * This is the API for compression methods using

@@ -1,4 +1,3 @@
-use time_series_start::{run_test, run_single_test};
 use std::env;
 
 fn main() {
@@ -11,11 +10,6 @@ fn main() {
 
 
 	match data_type.as_str() {
-		"f32" => run_single_test::<f32>(config_file,comp, num_comp),
-		"f64" => run_single_test::<f64>(config_file,comp, num_comp),
-		// "f32" => run_test::<f32>(config_file),
-		// "f64" => run_test::<f64>(config_file),
-//		"u32" => run_single_test::<u32>(config_file),
 		_ => panic!("Data type not supported yet"),
 	}
     

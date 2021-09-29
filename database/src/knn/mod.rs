@@ -8,8 +8,6 @@ use itertools::Itertools;
 use rustfft::FFTplanner;
 use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
-use crate::client::read_dict;
-use crate::kernel::Kernel;
 use ndarray::Array2;
 use std::collections::HashMap;
 use core::mem;
@@ -79,39 +77,6 @@ pub fn get_gamma(gammas: &Path) -> HashMap<String,isize>{
     //     });
 
     mymap
-}
-
-
-pub fn grail_file(file: &Path, dict: &Path, gamma:usize, coeffs:usize) -> Vec<LabelPixel> {
-    // read dictionary first;
-    let dic = read_dict::<f64>(dict.to_str().unwrap(),',');
-    // println!("dictionary shape: {} * {}", dic.rows(), dic.cols());
-
-    let mut grail = Kernel::new(dic,gamma,coeffs,1);
-    grail.dict_pre_process_v0();
-
-    BufReader::new(File::open(file).unwrap())
-        .lines()
-        .skip(0)
-        .map(|line| {
-            let line = line.unwrap();
-            let mut iter = line.trim()
-                .split(',')
-                .map(|x| f64::from_str(x).unwrap());
-
-            LabelPixel {
-                label: iter.next().unwrap() as isize,
-                pixels: {
-                    let mut batch_vec:Vec<f64> = iter.collect();
-                    let belesize = batch_vec.len();
-                    // println!("vec for matrix length: {}", belesize);
-                    let mut x = Array2::from_shape_vec((1,belesize),mem::replace(&mut batch_vec, Vec::with_capacity(belesize))).unwrap();
-
-                    grail.run_v0(x)
-                }
-            }
-        })
-        .collect()
 }
 
 pub fn fft_ifft_ratio(data: &[f64], ratio: f64) -> Vec<f64>{

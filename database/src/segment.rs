@@ -1,7 +1,6 @@
 //use std::convert::TryFrom;
 use std::sync::Arc;
 use std::sync::Mutex;
-use crate::buffer_pool::SegmentBuffer;
 use std::time::SystemTime;
 use std::ops::Sub;
 use num::FromPrimitive;
@@ -15,7 +14,6 @@ use rustfft::num_complex::Complex;
 use rustfft::num_traits::Zero;
 
 use std::time::{Duration};
-use crate::future_signal::SignalId;
 use num::Num;
 
 /* Currently plan to move methods into this file */
@@ -30,48 +28,10 @@ use rand::distributions::{Normal, Distribution};
 use crate::methods::compress::CompressionMethod;
 use crate::knn::fft_ifft_ratio;
 
+pub type SignalId = u64;
+pub type DictionaryId = u32; /* Type alias for dictionary id */
+const DEFAULT_BATCH_SIZE: usize = 50;
 
-/* 
- * Overview:
- * This is the API for a constructing a unit of time data. 
- * The goal is to construct two structures for immutable and 
- * mutable memory units. Furthermore, allow the mutable unit
- * to transfer to an immutable one
- *
- * Design Choice:
- * This was implemented with two structs instead of two traits.
- * This was done as
- * 1. There will likely only ever need to be a single type of segment
- * 2. Simpler implementation as fewer generics to keep track off
- * 3. Simpler memory model as heap allocation or generic restriction
- *    are not required
- *
- * Current Implementations:
- * There are two basic implementations created to be further fleshed
- * out and provide all neccessary functionality required by these
- * memory units.
- * Note: Mutable Segments may be unnecessary if futures implementation
- *       is chosen instead.
- * Note: Mutable Segments are entirely volatile and currently are not
- *       planned to be saved to disk. Must become immutable first.
- */
-
-/***************************************************************
- ***********************Segment Structure***********************
- ***************************************************************/
-
-/* Time stamps currently represented by Duration, will 
- * switch to a DateTime object instead.
- * Segment currently uniquely identified by SignalId and timestamp
- * since Signals are 1-n with threads so they shouldn't be able to produce
- * more than one in an instant.
- * Currently, There is an implicit linked list between segments from the 
- * same Signal. This is achieved by having each thread produce a unique
- * key defined by the SignalId it was produced from and its timestamp at creation.
- * To get the segment that was recorded before the current segment was, 
- * subtract the prev_seg_offset from the current segments timestamp and 
- * use those value to produce a key.
- */
 #[derive(Clone,Serialize,Deserialize,Debug,PartialEq)]
 pub struct Segment<T> {
 	method: Option<Methods>,
@@ -189,53 +149,6 @@ impl<'a> SegmentKey {
 	}
 }
 
-
-/***************************************************************
- ************************Segment Verifier***********************
- ***************************************************************/
-
-
-pub struct SegmentIter<T> 
-	where T: Copy + Send
-{
-	buffer: Arc<Mutex<SegmentBuffer<T>>>,
-	cur_seg_key: SegmentKey,
-}
-
-impl<T> SegmentIter<T> 
-	where T: Copy + Send,
-{
-	pub fn new(s_id: SignalId, timestamp: SystemTime, buffer: Arc<Mutex<SegmentBuffer<T>>>) -> SegmentIter<T> {
-		SegmentIter {
-			buffer: buffer,
-			cur_seg_key: SegmentKey::new(timestamp, s_id),
-		}
-	}
-
-	pub fn get_last_n(s_id: SignalId, timestamp: SystemTime, buffer: Arc<Mutex<SegmentBuffer<T>>>, n: usize) -> Vec<Segment<T>> {
-		SegmentIter::new(s_id, timestamp, buffer).take(n).collect()
-	}
-}
-
-impl<T> Iterator for SegmentIter<T> 
-	where T: Copy + Send,
-{
-	type Item = Segment<T>;
-
-	fn next(&mut self) -> Option<Segment<T>> {
-		if let Ok(mut buf) = self.buffer.lock() {
-			if let Ok(Some(seg)) = buf.get(self.cur_seg_key) {
-				self.cur_seg_key = match seg.get_prev_key() {
-					Some(key) => key,
-					_ => return None,
-				};
-				return Some(seg.clone());
-			}
-		}
-
-		None
-	}
-}
 
 
 /***************************************************************
