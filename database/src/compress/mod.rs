@@ -32,6 +32,7 @@ use std::collections::HashMap;
 use crate::methods::bit_packing::{BitPack, BYTE_BITS};
 use core::mem;
 use crate::methods::prec_double::{PrecisionBound, get_precision_bound};
+use std::sync::Arc;
 
 lazy_static! {
     pub static ref PRECISION_MAP: HashMap<i32, i32> =[(1, 5),
@@ -842,8 +843,8 @@ pub fn run_parquet_write_filter(test_file:&str, scl:usize,pred: f64, enc:&str){
         REQUIRED DOUBLE b;
       }
     ";
-    let schema = Rc::new(parse_message_type(message_type).unwrap());
-    let props = Rc::new(WriterProperties::builder()
+    let schema = Arc::new(parse_message_type(message_type).unwrap());
+    let props = Arc::new(WriterProperties::builder()
         .set_encoding(Encoding::PLAIN)
         .set_compression(comp)
         .set_dictionary_pagesize_limit(dictpg_lim) // change max page size to avoid fallback to plain and make sure dict is used.
