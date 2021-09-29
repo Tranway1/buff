@@ -1,5 +1,5 @@
-# BUFF: Decomposed Bounded Floats for Fast Compression and Queries
-A rust implementation of float compression for [paper](http://vldb.org/pvldb/vol14/p2586-liu.pdf) 
+# BUFF
+A rust implementation of float compression for vldb 2021 paper [Decomposed Bounded Floats for Fast Compression and Queries](http://vldb.org/pvldb/vol14/p2586-liu.pdf) [video](https://youtu.be/Krn98iPY99o). 
 
 ## BUFF compression not only reduces storage requirements but also enhances query performance:
 
