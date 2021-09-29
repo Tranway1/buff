@@ -1,5 +1,0 @@
-/target
-**/*.rs.bk
-config.toml
-test_configs
-/test_configs/config.toml
