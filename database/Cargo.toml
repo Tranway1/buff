@@ -63,7 +63,7 @@ nalgebra = "0.18.0"
 ndarray = "0.12.1"
 #ndarray-linalg = {version = "0.11"}
 flate2 = "1.0.11"
-parity-snappy = ""
+parity-snappy = "0.1.0"
 #ndarray-linalg = { version = "0.11", features = ["openblas"] }
 #ndarray-linalg = { version = "0.11", features = ["netlib"] }
 ndarray-linalg = { version = "0.11", features = ["intel-mkl"] }
@@ -72,7 +72,7 @@ bitpacking = "0.8.2"
 lazy_static = "1.4.0"
 croaring = "0.5.0"
 rust_decimal = "1.5.0"
-parquet = "2.0.0"
+parquet = "5.4.0"
 libc = "0.2"
 #packed_simd = "0.3.3"
 histogram = "0.6.9"
@@ -81,5 +81,5 @@ zipf = "7.0.0"
 permutation = "0.2.5"
 quickcheck = "0.9.2"
 quickcheck_macros = "0.9"
-myroaring = { version = "0.6.5", path = "../../roaring-rs" }
-my-bit-vec = { version = "0.6", path = "../../bit-vec"  }
+myroaring = { version = "0.6.5", path = "../roaring-rs" }
+my-bit-vec = { version = "0.6", path = "../bit-vec"  }
