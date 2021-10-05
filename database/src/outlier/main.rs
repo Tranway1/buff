@@ -1,6 +1,6 @@
 use rand::distributions::Distribution;
 use std::env;
-use time_series_start::outlier::{gen_u8_with_outlier, outlier_byteall_encoding_decoding, outlier_byte_majority_encoding_decoding};
+use buff::outlier::{gen_u8_with_outlier, outlier_byteall_encoding_decoding, outlier_byte_majority_encoding_decoding};
 use log::{info};
 
 fn main() {

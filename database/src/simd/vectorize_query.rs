@@ -213,12 +213,7 @@ pub unsafe fn equal_simd_mybitvec(x: &[u8], pred:u8)  -> BitVec{
         let equal = _mm256_cmpeq_epi8(word1, pred_word);
         let eq_mask = _mm256_movemask_epi8(equal);
         bitvec.push(mem::transmute::<i32, u32>(eq_mask));
-        // middle.insert_direct_u32(count,mem::transmute::<i32, u32>(eq_mask));
 
-        // println!("{:?}{:?}{:b}", word1, pred_word, mask);
-        // gt.push(mask);
-        // qualified += _popcnt32(eq_mask);
-        // count += 32;
         ptr = ptr.add(VECTOR_SIZE);
     }
     let bitv = BitVec::from_vec(&mut bitvec,len);
@@ -315,23 +310,6 @@ fn filtering_equal_progressive( x: &[u8], bit_vec: &BitVec) {
 
     println!("\tprogressive equal: {}",rb.cardinality());
 }
-
-
-// #[test]
-// fn test_simd() {
-//     let a = i32x4::new(1, 1, 3, 3);
-//     let b = i32x4::new(2, 2, 0, 0);
-//
-// // ge: >= (Greater Eequal; see also lt, le, gt, eq, ne).
-//     let m = a.ge(i32x4::splat(2));
-//
-//     if m.any() {
-//         // all / any / none allow coherent control flow
-//         let d = m.select(a, b);
-//         assert_eq!(d, i32x4::new(2, 2, 3, 3));
-//     }
-// }
-
 
 
 #[test]

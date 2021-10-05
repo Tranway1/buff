@@ -3,7 +3,6 @@ use crate::methods::compress::{SCALE, CompressionMethod};
 use crate::segment::Segment;
 use std::time::{SystemTime, Instant};
 use crate::methods::prec_double::{get_precision_bound, PrecisionBound};
-use crate::methods::bit_packing::{BitPack, BYTE_BITS};
 use crate::simd::vectorize_query::{range_simd_myroaring, equal_simd_myroaring};
 use std::mem;
 use log::info;
@@ -17,6 +16,7 @@ use my_bit_vec::BitVec;
 use std::slice::Iter;
 use parquet::basic::Type::BYTE_ARRAY;
 use num::Float;
+use crate::methods::bit_packing::BitPack;
 
 pub const BYTE_WORD:u32 = 32u32;
 pub const REVERSE_i64:i64 = -9205322385119247871i64;

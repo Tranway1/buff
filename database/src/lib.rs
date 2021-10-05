@@ -23,4 +23,3 @@ mod query;
 pub mod compress;
 pub mod pscan;
 pub mod outlier;
-pub mod knn;

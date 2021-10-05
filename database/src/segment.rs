@@ -26,7 +26,6 @@ use rand::{SeedableRng};
 use rand::rngs::{StdRng};
 use rand::distributions::{Normal, Distribution};
 use crate::methods::compress::CompressionMethod;
-use crate::knn::fft_ifft_ratio;
 
 pub type SignalId = u64;
 pub type DictionaryId = u32; /* Type alias for dictionary id */

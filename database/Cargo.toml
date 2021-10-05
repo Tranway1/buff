@@ -1,12 +1,8 @@
 [package]
-name = "time_series_start"
+name = "buff"
 version = "0.1.0"
-authors = ["Chunwei Liu <chunwei@uchicago.edu>", "Drew Callahan <acallahan@cs.uchicago.edu>"]
+authors = ["Chunwei Liu <chunwei@uchicago.edu>"]
 edition = "2018"
-
-[[bin]]
-name = "time_series_start"
-path = "src/main.rs"
 
 [[bin]]
 name = "compress"
@@ -19,10 +15,6 @@ path = "src/compress/main.rs"
 [[bin]]
 name = "p_scan"
 path = "src/pscan/main.rs"
-
-[[bin]]
-name = "knn"
-path = "src/knn/main.rs"
 
 [[bin]]
 name = "outlier_exp"

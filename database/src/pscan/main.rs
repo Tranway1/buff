@@ -1,8 +1,8 @@
-use time_series_start::client::construct_file_iterator_skip_newline;
-use time_series_start::methods::compress::SCALE;
-use time_series_start::segment::Segment;
+use buff::client::construct_file_iterator_skip_newline;
+use buff::methods::compress::SCALE;
+use buff::segment::Segment;
 use std::time::{SystemTime, Instant};
-use time_series_start::compress::split_double::SplitBDDoubleCompress;
+use buff::compress::split_double::SplitBDDoubleCompress;
 use std::env;
 use log::{ info};
 
